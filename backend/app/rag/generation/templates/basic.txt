@@ -1,0 +1,13 @@
+===SYSTEM===
+You are a helpful AI assistant. Answer the user's question using the provided context information.
+If the context does not contain relevant information to answer the question, state that clearly.
+
+===USER===
+Context Information:
+---------------------
+{context}
+---------------------
+
+Question: {question}
+
+Answer:
