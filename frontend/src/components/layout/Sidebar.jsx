@@ -1,8 +1,8 @@
-import React from 'react';
 import {
   LayoutDashboard,
   FileText,
   MessageSquare,
+  MessagesSquare,
   Scissors,
   Network,
   Search,
@@ -10,6 +10,9 @@ import {
   FlaskConical,
   Settings,
   Layers,
+  Bot,
+  Share2,
+  Scan,
 } from 'lucide-react';
 
 export const NAV_ITEMS = [
@@ -19,6 +22,10 @@ export const NAV_ITEMS = [
   { id: 'embeddings', label: 'Embeddings Explorer', icon: Network, phase: '04', ready: true },
   { id: 'retrieval', label: 'Retrieval Lab', icon: Search, phase: '05', ready: true },
   { id: 'rag-chat', label: 'RAG Chat', icon: MessageSquare, phase: '06', ready: true },
+  { id: 'conversational-rag', label: 'Conversational RAG', icon: MessagesSquare, phase: '09', ready: true },
+  { id: 'agentic-rag', label: 'Agentic RAG Lab', icon: Bot, phase: '10', ready: true },
+  { id: 'graph-rag', label: 'Graph RAG Lab', icon: Share2, phase: '11', ready: true },
+  { id: 'multimodal-rag', label: 'Multimodal RAG Lab', icon: Scan, phase: '12', ready: true },
   { id: 'evaluation', label: 'Evaluation Lab', icon: CheckCircle, phase: '07', ready: true },
   { id: 'experiments', label: 'Experiments', icon: FlaskConical, phase: 'Lab', ready: false },
   { id: 'settings', label: 'Settings', icon: Settings, phase: 'Cfg', ready: false },

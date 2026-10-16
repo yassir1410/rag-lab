@@ -5,13 +5,13 @@
 [![React](https://img.shields.io/badge/React-18-blue.svg)](https://react.dev/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue.svg)](https://www.postgresql.org/)
 [![pgvector](https://img.shields.io/badge/pgvector-0.7+-orange.svg)](https://github.com/pgvector/pgvector)
-[![Phase](https://img.shields.io/badge/Phase-08%20Advanced%20Retrieval%20Complete-emerald.svg)](docs/roadmap.md)
+[![Phase](https://img.shields.io/badge/Phase-12%20Multimodal%20RAG%20Complete-emerald.svg)](docs/roadmap.md)
 
 A comprehensive, hands-on, educational laboratory designed to master every layer of **Retrieval-Augmented Generation (RAG)** from first principles.
 
 ---
 
-## Current Status: Phase 08 — Advanced Retrieval, Hybrid Search & RAG Optimization
+## Current Status: Phase 12 — Multimodal RAG & Document Intelligence
 
 - **Phase 01 (Foundation)**: Modular monorepo, FastAPI backend, PostgreSQL 16 + pgvector, Alembic migrations, Docker Compose with health checks, and a responsive React JavaScript dashboard.
 - **Phase 02 (Document Ingestion)**: Multi-format document parsers (PDF, DOCX, TXT, Markdown), magic-byte validation, SHA-256 duplicate detection, non-destructive text normalization, section extraction, and interactive educational comparison view.
@@ -21,6 +21,10 @@ A comprehensive, hands-on, educational laboratory designed to master every layer
 - **Phase 06 (Naive RAG & Grounded Generation)**: End-to-end RAG orchestrator, multi-provider LLM support (Ollama, OpenAI, Gemini, Mock), prompt engineering, context budgeting, citation manager with [S#] extraction, and SSE real-time streaming.
 - **Phase 07 (RAG Evaluation & Quality Benchmarking)**: Golden dataset manager with human review workflows, pure Python retrieval metrics (P@K, R@K, HitRate, MRR, nDCG, MAP), claim-level faithfulness evaluation, citation support precision, model pricing registry, and interactive React Evaluation Studio with learning mode sandboxes.
 - **Phase 08 (Advanced Retrieval & Hybrid Search)**: PostgreSQL native GIN full-text search (`tsvector`), Reciprocal Rank Fusion (RRF, $k=60$) & normalized linear blending, Cross-Encoder reranking (TinyBERT CPU), multi-query expansion, contiguous neighbor context optimization, graded relevance auditing (0/1/2), and interactive 8-strategy visualizer in Retrieval Lab and Evaluation Studio.
+- **Phase 09 (Conversational RAG & Memory Engineering)**: PostgreSQL session persistence (`conversations`, `conversation_messages`, `conversation_summaries`), 3 memory strategies (Sliding Window, Token-Bounded Context Budgeting, Summary Memory with rolling compression), history-aware standalone query rewriter, strict segregation between dialogue memory and documentary evidence, 14-step turn orchestrator with SSE streaming, 12-scenario synthetic benchmark runner, and dedicated React Conversational Lab interface.
+- **Phase 10 (Agentic RAG & Tool-Orchestrated Retrieval)**: 5 approved read-only retrieval tools (`dense_search`, `hybrid_search`, `read_document_section`, `inspect_document_metadata`, `inspect_evidence`), 4 agent strategies (Single-Step, Iterative Plan-Act-Observe, Plan-and-Execute, Adaptive Routing), strict sandboxing, source-aware `EvidenceCollector`, deterministic resource bounds, database trace persistence (`agent_traces`), REST API with SSE streaming, React Agentic RAG Lab (Playground, Timeline, Tools, Compare, Traces, Learning Center), and 15-scenario synthetic multi-step benchmark suite.
+- **Phase 11 (Graph RAG & Knowledge Graph Engineering)**: PostgreSQL 16 relational property graph (`graph_entities`, `graph_relations`, `graph_evidence`, `graph_extraction_runs`), extensible `GraphRepository`, multi-engine extraction (Rule-based, NLP patterns, Structured LLM), strict ontology schema validation, entity resolution with Levenshtein fuzzy matching and `human_review` safety state, bounded traversal with cycle-detecting parameterized recursive SQL CTEs, graph analytics (degree centrality, density, community detection), 5 retrieval paradigms (Vector-Only, Entity Graph, Multi-Hop Traversal, Hybrid RRF, Community Thematic), verified source chunk citations (`[S1]`, `[S2]`), React Graph RAG Lab (Builder, SVG Explorer, Entity Resolution, Query Lab, Communities, Strategy Compare, Learning Center), and 15-scenario synthetic benchmark suite.
+- **Phase 12 (Multimodal RAG & Document Intelligence)**: PostgreSQL 12 multimodal schema (`document_page_assets`, `document_elements`, `multimodal_embeddings`), scanned PDF detection heuristic ($< 40$ chars) with $150\text{ DPI}$ pixmap rendering, spatial document layout analysis with 2-column reading order reconstruction, structural table extraction preserving row/col matrix integrity vs. flattened collapse, Tesseract OCR with CER/WER metrics, aligned cross-modal visual embeddings via `clip-ViT-B-32` in shared 512d space, 5 multimodal retrieval strategies (OCR text, Image-to-Image, Text-to-Image, Page-Level, Hybrid RRF), grounded vision Q&A with verified citation badges (`[IMG_P1]`, `[PAGE_1]`, `[TBL_P1]`), React Multimodal Lab (8 tabs), and 15-scenario synthetic multimodal benchmark suite.
 
 ---
 

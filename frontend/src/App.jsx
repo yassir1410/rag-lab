@@ -7,6 +7,10 @@ import { ChunkingLab } from './pages/ChunkingLab';
 import { EmbeddingsLab } from './pages/EmbeddingsLab';
 import { RetrievalLab } from './pages/RetrievalLab';
 import { RagChat } from './pages/RagChat';
+import { ConversationalLab } from './pages/ConversationalLab';
+import { AgenticLab } from './pages/AgenticLab';
+import { GraphRAGLab } from './pages/GraphRAGLab';
+import { MultimodalLab } from './pages/MultimodalLab';
 import { EvaluationStudio } from './pages/EvaluationStudio';
 import {
   ExperimentsPage,
@@ -39,6 +43,14 @@ export default function App() {
         return <RetrievalLab />;
       case 'rag-chat':
         return <RagChat />;
+      case 'conversational-rag':
+        return <ConversationalLab />;
+      case 'agentic-rag':
+        return <AgenticLab />;
+      case 'graph-rag':
+        return <GraphRAGLab />;
+      case 'multimodal-rag':
+        return <MultimodalLab />;
       case 'evaluation':
         return <EvaluationStudio />;
       case 'experiments':

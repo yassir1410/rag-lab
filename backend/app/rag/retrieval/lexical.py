@@ -75,10 +75,8 @@ class LexicalSearcher:
         valid_languages = {"english", "french", "simple", "german", "spanish"}
         lang_config = language.lower() if language.lower() in valid_languages else "english"
 
-        # Build filter clauses
-        where_clauses = [
-            f"c.tsv_content @@ plainto_tsquery('{lang_config}', :query_text)"
-        ]
+        # Build base filter clauses
+        filter_clauses = []
         params: Dict[str, Any] = {
             "query_text": query,
             "limit_val": top_k,
@@ -86,19 +84,19 @@ class LexicalSearcher:
 
         if filters:
             if filters.document_id:
-                where_clauses.append("c.document_id = :doc_id")
+                filter_clauses.append("c.document_id = :doc_id")
                 params["doc_id"] = str(filters.document_id)
             if filters.chunking_experiment_id:
-                where_clauses.append("c.experiment_id = :exp_id")
+                filter_clauses.append("c.experiment_id = :exp_id")
                 params["exp_id"] = str(filters.chunking_experiment_id)
             if filters.page_number is not None:
-                where_clauses.append("(c.metadata->>'page_number')::int = :page_num")
+                filter_clauses.append("(c.metadata->>'page_number')::int = :page_num")
                 params["page_num"] = filters.page_number
             if filters.mime_type:
-                where_clauses.append("d.mime_type = :mime_type")
+                filter_clauses.append("d.mime_type = :mime_type")
                 params["mime_type"] = filters.mime_type
 
-        where_sql = " AND ".join(where_clauses)
+        filter_sql = (" AND " + " AND ".join(filter_clauses)) if filter_clauses else ""
 
         sql = f"""
             SELECT
@@ -114,34 +112,50 @@ class LexicalSearcher:
                 ts_rank_cd(c.tsv_content, plainto_tsquery('{lang_config}', :query_text), 32) as rank_score
             FROM document_chunks c
             JOIN documents d ON c.document_id = d.id
-            WHERE {where_sql}
+            WHERE c.tsv_content @@ plainto_tsquery('{lang_config}', :query_text) {filter_sql}
             ORDER BY rank_score DESC, c.sequence_index ASC
             LIMIT :limit_val;
         """
 
         rows = session.execute(text(sql), params).fetchall()
 
-        # If strict tsquery matched 0 rows, attempt a websearch_to_tsquery fallback
-        if not rows:
-            fallback_sql = f"""
-                SELECT
-                    c.id as chunk_id,
-                    c.document_id,
-                    d.original_filename as document_name,
-                    d.mime_type,
-                    c.sequence_index,
-                    c.token_count,
-                    c.char_count,
-                    c.content,
-                    c.metadata as chunk_metadata,
-                    ts_rank_cd(c.tsv_content, websearch_to_tsquery('{lang_config}', :query_text), 32) as rank_score
-                FROM document_chunks c
-                JOIN documents d ON c.document_id = d.id
-                WHERE c.tsv_content @@ websearch_to_tsquery('{lang_config}', :query_text)
-                ORDER BY rank_score DESC, c.sequence_index ASC
-                LIMIT :limit_val;
-            """
-            rows = session.execute(text(fallback_sql), params).fetchall()
+        # If strict tsquery returned fewer than top_k rows, perform disjunctive OR fallback
+        if len(rows) < top_k:
+            existing_ids = {r.chunk_id for r in rows}
+            tokens = [t.strip('.,/()[]?') for t in re.findall(r'[\w\+\#\.\-]+', query)]
+            tokens = [t for t in tokens if len(t) >= 2]
+            if tokens:
+                or_query = " or ".join(tokens)
+                fallback_params = dict(params)
+                fallback_params["or_query"] = or_query
+                remaining_k = top_k - len(rows)
+                fallback_params["remaining_k"] = remaining_k
+                exclude_clause = ""
+                if existing_ids:
+                    id_list_str = ", ".join(f"'{str(cid)}'::uuid" for cid in existing_ids)
+                    exclude_clause = f" AND c.id NOT IN ({id_list_str})"
+
+                fallback_sql = f"""
+                    SELECT
+                        c.id as chunk_id,
+                        c.document_id,
+                        d.original_filename as document_name,
+                        d.mime_type,
+                        c.sequence_index,
+                        c.token_count,
+                        c.char_count,
+                        c.content,
+                        c.metadata as chunk_metadata,
+                        ts_rank_cd(c.tsv_content, websearch_to_tsquery('{lang_config}', :or_query), 32) as rank_score
+                    FROM document_chunks c
+                    JOIN documents d ON c.document_id = d.id
+                    WHERE c.tsv_content @@ websearch_to_tsquery('{lang_config}', :or_query)
+                          {filter_sql} {exclude_clause}
+                    ORDER BY rank_score DESC, c.sequence_index ASC
+                    LIMIT :remaining_k;
+                """
+                fallback_rows = session.execute(text(fallback_sql), fallback_params).fetchall()
+                rows = list(rows) + list(fallback_rows)
 
         results: List[SearchResultItem] = []
         for r in rows:

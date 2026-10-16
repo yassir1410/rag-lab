@@ -8,6 +8,23 @@ from app.models.evaluation import (
     EvaluationRun,
     EvaluationItemResult,
 )
+from app.models.conversation import (
+    Conversation,
+    ConversationMessage,
+    ConversationSummary,
+)
+from app.models.agent import AgentExecutionTrace
+from app.models.graph import (
+    GraphEntity,
+    GraphRelation,
+    GraphEvidence,
+    GraphExtractionRun,
+)
+from app.models.multimodal import (
+    DocumentPageAsset,
+    DocumentElement,
+    MultimodalEmbedding,
+)
 
 __all__ = [
     "Document",
@@ -22,6 +39,17 @@ __all__ = [
     "EvaluationQuestion",
     "EvaluationRun",
     "EvaluationItemResult",
+    "Conversation",
+    "ConversationMessage",
+    "ConversationSummary",
+    "AgentExecutionTrace",
+    "GraphEntity",
+    "GraphRelation",
+    "GraphEvidence",
+    "GraphExtractionRun",
+    "DocumentPageAsset",
+    "DocumentElement",
+    "MultimodalEmbedding",
 ]
 
 

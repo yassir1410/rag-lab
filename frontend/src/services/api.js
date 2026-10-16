@@ -536,8 +536,330 @@ class ApiClient {
       method: 'POST',
     });
   }
+
+  // Phase 09 Conversational RAG & Memory
+  async listConversations(params = {}) {
+    const qs = new URLSearchParams(params).toString();
+    const queryStr = qs ? `?${qs}` : '';
+    return this._request(`/api/v1/conversations${queryStr}`);
+  }
+
+  async createConversation(data = {}) {
+    return this._request('/api/v1/conversations', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getConversation(id) {
+    return this._request(`/api/v1/conversations/${id}`);
+  }
+
+  async updateConversation(id, data = {}) {
+    return this._request(`/api/v1/conversations/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteConversation(id) {
+    return this._request(`/api/v1/conversations/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async listConversationMessages(id, params = {}) {
+    const qs = new URLSearchParams(params).toString();
+    const queryStr = qs ? `?${qs}` : '';
+    return this._request(`/api/v1/conversations/${id}/messages${queryStr}`);
+  }
+
+  async executeTurn(id, data) {
+    return this._request(`/api/v1/conversations/${id}/messages`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async inspectMemory(id, strategy = null) {
+    const queryStr = strategy ? `?strategy=${encodeURIComponent(strategy)}` : '';
+    return this._request(`/api/v1/conversations/${id}/memory${queryStr}`);
+  }
+
+  async previewQueryRewrite(id, query) {
+    return this._request(`/api/v1/conversations/${id}/rewrite-preview?query=${encodeURIComponent(query)}`, {
+      method: 'POST',
+    });
+  }
+
+  async compareMemoryStrategies(id, query) {
+    return this._request(`/api/v1/conversations/${id}/compare-strategies?query=${encodeURIComponent(query)}`, {
+      method: 'POST',
+    });
+  }
+
+  async listMemoryStrategies() {
+    return this._request('/api/v1/conversations/memory-strategies');
+  }
+
+  async runConversationalBenchmark(params = {}) {
+    const qs = new URLSearchParams(params).toString();
+    const queryStr = qs ? `?${qs}` : '';
+    return this._request(`/api/v1/conversations/evaluation/benchmark${queryStr}`, {
+      method: 'POST',
+    });
+  }
+
+  // Agentic RAG API (Phase 10)
+  async listAgentStrategies() {
+    return this._request('/api/v1/agents/strategies');
+  }
+
+  async listAgentTools() {
+    return this._request('/api/v1/agents/tools');
+  }
+
+  async queryAgent(payload) {
+    return this._request('/api/v1/agents/query', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async streamAgentQuery(payload, onEvent, onError) {
+    const url = `${API_BASE_URL}/api/v1/agents/query/stream`;
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `HTTP ${response.status}: Failed to stream Agent query`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let buffer = '';
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop();
+
+        for (const block of lines) {
+          if (!block.trim()) continue;
+          let eventType = 'message';
+          let eventData = null;
+
+          const blockLines = block.split('\n');
+          for (const line of blockLines) {
+            if (line.startsWith('event: ')) {
+              eventType = line.replace('event: ', '').trim();
+            } else if (line.startsWith('data: ')) {
+              try {
+                eventData = JSON.parse(line.replace('data: ', '').trim());
+              } catch {
+                eventData = line.replace('data: ', '').trim();
+              }
+            }
+          }
+
+          if (onEvent) {
+            onEvent(eventType, eventData);
+          }
+        }
+      }
+    } catch (err) {
+      if (onError) onError(err);
+      else console.error('Agent stream error:', err);
+    }
+  }
+
+  async getAgentTrace(traceId) {
+    return this._request(`/api/v1/agents/traces/${traceId}`);
+  }
+
+  async compareAgentStrategies(payload) {
+    return this._request('/api/v1/agents/compare', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async runAgentBenchmark(params = {}) {
+    const qs = new URLSearchParams(params).toString();
+    const queryStr = qs ? `?${qs}` : '';
+    return this._request(`/api/v1/agents/benchmark${queryStr}`, {
+      method: 'POST',
+    });
+  }
+
+  // Graph RAG API (Phase 11)
+  async getGraphStats() {
+    return this._request('/api/v1/graph/stats');
+  }
+
+  async listGraphEntities(params = {}) {
+    const qs = new URLSearchParams(params).toString();
+    const queryStr = qs ? `?${qs}` : '';
+    return this._request(`/api/v1/graph/entities${queryStr}`);
+  }
+
+  async getGraphEntity(entityId) {
+    return this._request(`/api/v1/graph/entities/${entityId}`);
+  }
+
+  async listGraphRelations(params = {}) {
+    const qs = new URLSearchParams(params).toString();
+    const queryStr = qs ? `?${qs}` : '';
+    return this._request(`/api/v1/graph/relations${queryStr}`);
+  }
+
+  async extractGraph(payload) {
+    return this._request('/api/v1/graph/extract', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async listGraphExtractionRuns(limit = 20) {
+    return this._request(`/api/v1/graph/extraction-runs?limit=${limit}`);
+  }
+
+  async traverseGraph(payload) {
+    return this._request('/api/v1/graph/traverse', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async findGraphPaths(payload) {
+    return this._request('/api/v1/graph/paths', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async queryGraph(payload) {
+    return this._request('/api/v1/graph/query', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async compareGraphStrategies(payload) {
+    return this._request('/api/v1/graph/compare', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async getGraphCommunities() {
+    return this._request('/api/v1/graph/communities');
+  }
+
+  async getGraphMergeCandidates() {
+    return this._request('/api/v1/graph/merge-candidates');
+  }
+
+  async mergeGraphEntities(payload) {
+    return this._request('/api/v1/graph/merge', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async runGraphBenchmark(params = {}) {
+    const qs = new URLSearchParams(params).toString();
+    const queryStr = qs ? `?${qs}` : '';
+    return this._request(`/api/v1/graph/benchmark${queryStr}`, {
+      method: 'POST',
+    });
+  }
+
+  // Multimodal RAG & Document Intelligence API
+  async analyzeDocumentMultimodal(documentId, payload = {}) {
+    return this._request(`/api/v1/multimodal/documents/${documentId}/analyze`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async getDocumentElements(documentId, params = {}) {
+    const qs = new URLSearchParams(params).toString();
+    const queryStr = qs ? `?${qs}` : '';
+    return this._request(`/api/v1/multimodal/documents/${documentId}/elements${queryStr}`);
+  }
+
+  async getDocumentPages(documentId) {
+    return this._request(`/api/v1/multimodal/documents/${documentId}/pages`);
+  }
+
+  getPageImageUrl(documentId, pageNum) {
+    return `${this.baseUrl}/api/v1/multimodal/documents/${documentId}/pages/${pageNum}/image`;
+  }
+
+  async previewOCR(payload) {
+    return this._request('/api/v1/multimodal/ocr/preview', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async extractDocumentTables(payload) {
+    return this._request('/api/v1/multimodal/tables/extract', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async getMultimodalModels() {
+    return this._request('/api/v1/multimodal/models');
+  }
+
+  async generateMultimodalEmbeddings(payload) {
+    return this._request('/api/v1/multimodal/embeddings/generate', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async searchMultimodal(payload) {
+    return this._request('/api/v1/multimodal/search', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async queryVision(payload) {
+    return this._request('/api/v1/multimodal/query', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async compareMultimodalStrategies(documentId, query) {
+    return this._request(`/api/v1/multimodal/compare?document_id=${documentId}&query=${encodeURIComponent(query)}`, {
+      method: 'POST',
+    });
+  }
+
+  async runMultimodalBenchmark() {
+    return this._request('/api/v1/multimodal/benchmark', {
+      method: 'POST',
+    });
+  }
 }
 
 export const api = new ApiClient();
 export default api;
+
 

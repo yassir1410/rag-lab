@@ -148,16 +148,26 @@ class RerankerRegistry:
     """Registry providing singleton access to configured rerankers."""
 
     def __init__(self):
+        tinybert = LocalCrossEncoderReranker("cross-encoder/ms-marco-TinyBERT-L-2-v2")
         self._rerankers: Dict[str, BaseReranker] = {
             "none": NoOpReranker(),
             "noop": NoOpReranker(),
             "mock": MockReranker(),
-            "tinybert": LocalCrossEncoderReranker("cross-encoder/ms-marco-TinyBERT-L-2-v2"),
+            "tinybert": tinybert,
+            "cross-encoder/ms-marco-tinybert-l-2-v2": tinybert,
+            "ms-marco-tinybert": tinybert,
+            "ms-marco-tinybert-l-2-v2": tinybert,
         }
 
     def get_reranker(self, name: Optional[str] = "none") -> BaseReranker:
         key = (name or "none").lower().strip()
-        return self._rerankers.get(key, self._rerankers["none"])
+        if key in self._rerankers:
+            return self._rerankers[key]
+        if "tinybert" in key:
+            return self._rerankers["tinybert"]
+        if "mock" in key:
+            return self._rerankers["mock"]
+        return self._rerankers["none"]
 
     def list_rerankers(self) -> List[Dict[str, Any]]:
         return [

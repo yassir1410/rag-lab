@@ -208,7 +208,7 @@ class HybridRetrievalEngine:
         warnings: List[str] = []
         expanded_queries: List[str] = [request.query]
 
-        candidate_pool_size = max(request.top_k * 2, 10)
+        candidate_pool_size = max(request.top_k * 3, 15)
 
         # ----------------------------------------------------
         # 1. DENSE ONLY STRATEGY

@@ -92,58 +92,68 @@ This roadmap outlines the complete, pedagogical progression of the **RAG Enginee
   - 12 reproducible experiments on golden CV benchmark showing Recall@5 boost from 56.2% to 60.4% with Adaptive Context Selection.
   - Comprehensive French pedagogical documentation and validation reports (`docs/tutorials/08-advanced-retrieval.md`, `docs/experiments/08-retrieval-optimization.md`, `docs/experiments/08-validation-report.md`).
 
-### Phase 09: Context Construction & Prompt Engineering
-- **Status:** Planned
+### Phase 09: Conversational RAG & Memory Engineering
+- **Status:** Completed
 - **Milestones:**
-  - Dynamic prompt templates with token budgeting and overflow trimming.
-  - Mitigation of "Lost in the Middle" phenomenon (placing crucial context at the start/end).
-  - Document metadata injection (titles, page numbers, timestamps).
+  - PostgreSQL persistence for sessions: `conversations`, `conversation_messages`, and `conversation_summaries` tables with strict monotonic sequence numbers and cascading cleanup.
+  - 3 Distinct Memory Strategies: Sliding Window ($K$ turns), Token-Bounded Memory (dynamic context envelope budgeting), and Summary Memory (rolling LLM-generated summaries with sequence tracking).
+  - History-Aware Query Rewriter: Coreference and pronoun resolution, standalone question detection, and ambiguity alerts.
+  - Conversational Context Builder: Strict segregation between conversation memory and authoritative documentary context to prevent memory contamination.
+  - Multi-Turn Conversational Orchestrator: Complete 14-step turn lifecycle supporting both synchronous and SSE token streaming.
+  - Versioned REST API under `/api/v1/conversations` (sessions, turns, streaming, memory inspection, rewrite preview, strategy comparison).
+  - React Conversational Lab interface with session manager, streaming chat, 6-tab diagnostic inspector, strategy comparison mode, and interactive learning center.
+  - 12-Scenario synthetic multi-turn benchmark with 91.7% pass rate.
+  - Comprehensive French tutorial and experimental reports (`docs/tutorials/09-conversational-rag.md`, `docs/experiments/09-conversational-experiments.md`, `docs/experiments/09-validation-report.md`).
 
-### Phase 10: Generation & Response Synthesis
-- **Status:** Planned
+### Phase 10: Agentic RAG & Tool-Orchestrated Retrieval
+- **Status:** Completed
 - **Milestones:**
-  - Local LLM inference via Ollama / vLLM and API-based models.
-  - Server-Sent Events (SSE) real-time token streaming.
-  - Exact source attribution and interactive citation links to document pages.
+  - 5 strictly allowlisted read-only tools: `dense_search`, `hybrid_search`, `read_document_section`, `inspect_document_metadata`, `inspect_evidence` with typed Pydantic JSON schemas.
+  - 4 agent strategies: Single-Step (Tool Baseline), Iterative Retrieval (Plan-Act-Observe Loop), Plan-and-Execute (Decomposition), and Adaptive Routing (Dynamic Fast-Path).
+  - Source-aware `EvidenceCollector`: automated chunk deduplication, stable `[S1]`, `[S2]` tags, document provenance tracking, and citation validation.
+  - Deterministic stopping conditions and resource bounding: `MAX_ITERATIONS`, `MAX_TOOL_CALLS`, `TIME_BUDGET_EXCEEDED`, `NO_NEW_EVIDENCE`, `SUFFICIENT_EVIDENCE`.
+  - Database trace persistence: `agent_traces` table with Alembic migration `0009_agent_traces`.
+  - Versioned REST API under `/api/v1/agents` with real-time SSE streaming (`meta`, `step`, `token`, `citations`, `done`).
+  - React Agentic RAG Lab UI with 6 tabs: Agent Playground, Agent Timeline, Tool Explorer, Strategy Comparison, Trace Inspector, and Learning Center.
+  - 15-scenario synthetic multi-step benchmark suite with 93.3% pass rate.
+  - French educational tutorial, experiment report, and validation report (`docs/tutorials/10-agentic-rag.md`, `docs/experiments/10-agentic-experiments.md`, `docs/experiments/10-validation-report.md`).
 
-### Phase 11: RAG Evaluation Framework
-- **Status:** Planned
+### Phase 11: Graph RAG & Knowledge Graph Engineering
+- **Status:** Completed
 - **Milestones:**
-  - Quantitative metrics suite: Context Precision, Context Recall, Faithfulness, and Answer Relevance.
-  - Automated synthetic test dataset generation using LLM self-questioning.
-  - Continuous integration regression tests on retrieval accuracy.
+  - Relational Property Graph in PostgreSQL: `graph_entities`, `graph_relations`, `graph_evidence`, and `graph_extraction_runs` with Alembic migration `0010_graph_rag_tables`.
+  - Extensible `GraphRepository` abstraction decoupled from proprietary graph databases.
+  - Multi-engine entity and relation extraction: Rule-Based (regex + ontology dictionaries), NLP patterns, and Structured LLM with strict JSON schema validation.
+  - Strict ontology and domain/range constraint enforcement (`GraphSchemaValidator`).
+  - Entity Resolution: canonical slug normalizer, Levenshtein fuzzy similarity matching ($\ge 0.88$), alias mapping, and `human_review` safety state for ambiguous merges.
+  - Bounded graph traversal using parameterized recursive SQL CTEs in PostgreSQL 16 with cycle detection (`NOT (target_id = ANY(path))`) and depth limit (`max_hops`).
+  - Graph analytics: degree centrality, graph density, connected components, and label propagation community clustering.
+  - 5 Retrieval Paradigms: Vector-Only Baseline, Entity-Based Graph, Multi-Hop Traversal, Hybrid Graph + Vector (Reciprocal Rank Fusion, $k=60$), and Community-Based Thematic Summarization.
+  - Verifiable citation integrity: all graph entities and relations linked to exact source chunks in `graph_evidence` with stable `[S1]`, `[S2]` citation tags.
+  - Dedicated React Graph RAG Lab with 7 interactive tabs: Builder, SVG Network Explorer, Entity Resolution, Query Lab, Communities, Strategy Compare, and Learning Center.
+  - 15-scenario synthetic evaluation benchmark with 93.3% multi-hop resolution and 100% hybrid pass rate.
+  - Comprehensive French tutorial, experiment report, and validation report (`docs/tutorials/11-graph-rag.md`, `docs/experiments/11-graph-rag-experiments.md`, `docs/experiments/11-validation-report.md`).
 
-### Phase 12: Query Transformation & Expansion
-- **Status:** Planned
+### Phase 12: Multimodal RAG & Document Intelligence
+- **Status:** Completed
 - **Milestones:**
-  - Hypothetical Document Embeddings (HyDE).
-  - Multi-query expansion and query rewriting.
-  - Step-back prompting for abstract conceptual queries.
+  - Relational Property Graph & Multimodal tables in PostgreSQL: `document_page_assets`, `document_elements`, and `multimodal_embeddings` with Alembic migration `0011_multimodal_rag_tables`.
+  - Scanned PDF detection heuristic ($< 40$ chars threshold) with high-fidelity $150\text{ DPI}$ pixmap rendering via PyMuPDF.
+  - Spatial document layout analysis: title, header, footer, table, figure, caption classification with bounding boxes and 2-column reading order reconstruction.
+  - Structural table extraction preserving row/column matrix coordinates and formatting clean Markdown tables vs. raw flattened text.
+  - Tesseract OCR provider with language selection (`eng`, `fra`), word confidence tracking, and educational CER/WER Levenshtein metrics comparator.
+  - Aligned cross-modal visual embeddings using `sentence-transformers/clip-ViT-B-32` in a shared 512-dimensional vector space with unit L2 normalization.
+  - 5 Multimodal retrieval paradigms: OCR Text Retrieval, Image-to-Image, Text-to-Image (CLIP), Page-Level Retrieval, and Hybrid Multimodal RRF Fusion ($k=60$).
+  - Grounded vision-language generation with verifiable citations (`[IMG_P1]`, `[PAGE_1]`, `[TBL_P1]`) and hallucination rejection.
+  - React Multimodal Lab interface with 8 interactive tabs: Document Analyzer, OCR Lab, Table Intelligence, Image Embeddings, Multimodal Search, Vision Q&A, Strategy Compare, and Learning Center.
+  - 15-scenario synthetic multimodal evaluation benchmark suite with 100% pass rate.
+  - Comprehensive French tutorial, experiment report, and validation report (`docs/tutorials/12-multimodal-rag.md`, `docs/experiments/12-multimodal-experiments.md`, `docs/experiments/12-validation-report.md`).
 
-### Phase 13: Advanced Routing & Self-Reflective / Corrective RAG
+### Phase 13: Production Hardening & Observability
 - **Status:** Planned
 - **Milestones:**
-  - Adaptive intent classification and router to specialized vector indexes.
-  - Corrective RAG (CRAG): evaluating retrieved document confidence and triggering web search fallback.
-  - Self-RAG: reflection tokens evaluating relevance before generation.
-
-### Phase 14: Agentic RAG
-- **Status:** Planned
-- **Milestones:**
-  - Multi-step tool use, reasoning, and iterative query formulation (ReAct).
-  - Graph-based agent orchestration (LangGraph / custom state machine).
-  - Dynamic human-in-the-loop verification for low-confidence queries.
-
-### Phase 15: Graph RAG & Knowledge Graphs
-- **Status:** Planned
-- **Milestones:**
-  - Entity and relation extraction from ingested sections.
-  - Graph database traversal (Neo4j / NetworkX).
-  - Hybrid vector + graph multi-hop relational retrieval.
-
-### Phase 16: Multimodal RAG & Production Hardening
-- **Status:** Planned
-- **Milestones:**
-  - Multimodal document ingestion (images, diagrams, charts via vision models and CLIP embeddings).
   - Semantic caching (Redis / pgvector) to reduce duplicate LLM generation costs.
-  - Distributed rate limiting, observability with OpenTelemetry, and security hardening.
+  - Distributed rate limiting and concurrent request throttling.
+  - OpenTelemetry distributed tracing and production observability.
+  - Adversarial prompt injection defense and safety auditing.
+
