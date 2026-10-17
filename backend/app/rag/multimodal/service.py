@@ -33,6 +33,7 @@ from app.rag.multimodal.retrieval.fusion import HybridMultimodalFusion
 from app.rag.multimodal.generation.vision_provider import (
     MockVisionProvider,
     GeminiVisionProvider,
+    VisionProviderError,
 )
 from app.rag.multimodal.generation.multimodal_context import MultimodalContextBuilder
 from app.rag.multimodal.generation.citation_manager import MultimodalCitationManager
@@ -373,7 +374,50 @@ class MultimodalService:
         file_path = self._resolve_file_path(doc)
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"Underlying file not found at {file_path}")
-        return TableExtractor.extract_tables_from_doc(file_path, target_page=page_number)
+        
+        tables = TableExtractor.extract_tables_from_doc(file_path, target_page=page_number)
+
+        # Persist extracted tables if not already stored as DocumentElement
+        try:
+            for t in tables:
+                p_num = t["page_number"]
+                existing = db.query(DocumentElement).filter(
+                    DocumentElement.document_id == document_id,
+                    DocumentElement.page_number == p_num,
+                    DocumentElement.element_type == "table",
+                ).first()
+                if not existing:
+                    page_asset = db.query(DocumentPageAsset).filter(
+                        DocumentPageAsset.document_id == document_id,
+                        DocumentPageAsset.page_number == p_num,
+                    ).first()
+                    doc_elem = DocumentElement(
+                        document_id=document_id,
+                        page_asset_id=page_asset.id if page_asset else None,
+                        page_number=p_num,
+                        element_type="table",
+                        reading_order=100,
+                        bounding_box=t["bounding_box"],
+                        content_text=t["markdown_table"],
+                        structured_data={
+                            "table_id": t["table_id"],
+                            "caption": t["caption"],
+                            "num_rows": t["num_rows"],
+                            "num_cols": t["num_cols"],
+                            "headers": t["headers"],
+                            "rows": t["rows"],
+                            "markdown": t["markdown_table"],
+                            "raw_flattened_text": t.get("raw_flattened_text", ""),
+                        },
+                        confidence=0.95,
+                    )
+                    db.add(doc_elem)
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            logger.warning(f"Failed to persist extracted tables to db: {e}")
+
+        return tables
 
     def search(
         self,
@@ -381,6 +425,8 @@ class MultimodalService:
         query: str,
         strategy: str = "hybrid",
         document_id: Optional[uuid.UUID] = None,
+        page_number: Optional[int] = None,
+        element_ids: Optional[List[uuid.UUID]] = None,
         top_k: int = 5,
         ocr_weight: float = 0.5,
         visual_weight: float = 0.5,
@@ -389,24 +435,57 @@ class MultimodalService:
         t0 = time.perf_counter()
 
         if strategy == "ocr_text":
-            results = OCRTextRetriever.search(db, query=query, document_id=document_id, top_k=top_k)
+            results = OCRTextRetriever.search(
+                db,
+                query=query,
+                document_id=document_id,
+                page_number=page_number,
+                element_ids=element_ids,
+                top_k=top_k,
+            )
         elif strategy == "text_to_image":
             results = self.cross_modal_retriever.search_text_to_image(
-                db, query=query, document_id=document_id, top_k=top_k
+                db,
+                query=query,
+                document_id=document_id,
+                page_number=page_number,
+                element_ids=element_ids,
+                top_k=top_k,
             )
         elif strategy == "page_level":
             results = PageLevelRetriever.search_pages(
-                db, query=query, document_id=document_id, top_k=top_k
+                db,
+                query=query,
+                document_id=document_id,
+                page_number=page_number,
+                top_k=top_k,
             )
         elif strategy == "image_to_image":
             # Image query fallback: encode query text as multimodal prompt
             results = self.cross_modal_retriever.search_text_to_image(
-                db, query=query, document_id=document_id, top_k=top_k
+                db,
+                query=query,
+                document_id=document_id,
+                page_number=page_number,
+                element_ids=element_ids,
+                top_k=top_k,
             )
         else:  # hybrid RRF
-            text_items = OCRTextRetriever.search(db, query=query, document_id=document_id, top_k=top_k * 2)
+            text_items = OCRTextRetriever.search(
+                db,
+                query=query,
+                document_id=document_id,
+                page_number=page_number,
+                element_ids=element_ids,
+                top_k=top_k * 2,
+            )
             visual_items = self.cross_modal_retriever.search_text_to_image(
-                db, query=query, document_id=document_id, top_k=top_k * 2
+                db,
+                query=query,
+                document_id=document_id,
+                page_number=page_number,
+                element_ids=element_ids,
+                top_k=top_k * 2,
             )
             results = HybridMultimodalFusion.rrf_fuse(
                 text_results=text_items,
@@ -438,22 +517,39 @@ class MultimodalService:
         """Performs grounded vision question answering with citation validation."""
         t0 = time.perf_counter()
 
-        # Retrieve relevant multimodal evidence
+        # Retrieve relevant multimodal evidence with optional page/element filters
         search_res = self.search(
-            db, query=question, strategy="hybrid", document_id=document_id, top_k=4
+            db,
+            query=question,
+            strategy="hybrid",
+            document_id=document_id,
+            page_number=page_number,
+            element_ids=element_ids,
+            top_k=4,
         )
         evidence_items = search_res["results"]
 
         # Build context
         context_str, image_paths = MultimodalContextBuilder.build_context(evidence_items)
 
-        # Select provider
-        vision_provider = self.gemini_vision if (provider == "gemini" and self.gemini_vision.is_available()) else self.mock_vision
-        gen_res = vision_provider.generate_answer(
-            question=question,
-            context_text=context_str,
-            image_paths=image_paths,
-        )
+        # Select provider with strict enforcement
+        if provider == "gemini":
+            if not self.gemini_vision.is_available():
+                raise VisionProviderError(
+                    "GEMINI_API_KEY is not configured or unavailable on the server.",
+                    status_code=503,
+                )
+            gen_res = self.gemini_vision.generate_answer(
+                question=question,
+                context_text=context_str,
+                image_paths=image_paths,
+            )
+        else:
+            gen_res = self.mock_vision.generate_answer(
+                question=question,
+                context_text=context_str,
+                image_paths=image_paths,
+            )
 
         # Validate citations
         citation_info = MultimodalCitationManager.validate_citations(
@@ -462,11 +558,18 @@ class MultimodalService:
 
         latency_ms = round((time.perf_counter() - t0) * 1000.0, 2)
 
+        # Clean evidence items to never expose raw server disk paths
+        clean_evidence = []
+        for it in evidence_items:
+            clean_it = dict(it)
+            clean_it.pop("_local_image_path", None)
+            clean_evidence.append(clean_it)
+
         return {
             "question": question,
             "answer": gen_res["answer"],
             "citations": citation_info["valid_citations"],
-            "evidence_items": evidence_items,
+            "evidence_items": clean_evidence,
             "model_used": gen_res["model"],
             "is_vision_enabled": gen_res["is_vision_enabled"],
             "warnings": gen_res["warnings"] + (

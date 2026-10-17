@@ -52,6 +52,8 @@ export function MultimodalLab() {
   // Tab 3: Tables State
   const [extractedTables, setExtractedTables] = useState([]);
   const [tableLoading, setTableLoading] = useState(false);
+  const [tableScope, setTableScope] = useState('all'); // 'all' or 'current'
+  const [hasAttemptedTableExtraction, setHasAttemptedTableExtraction] = useState(false);
 
   // Tab 4: Embeddings State
   const [modelsList, setModelsList] = useState([]);
@@ -90,16 +92,21 @@ export function MultimodalLab() {
   useEffect(() => {
     if (selectedDocId) {
       loadDocData(selectedDocId);
+      setExtractedTables([]);
+      setHasAttemptedTableExtraction(false);
     }
   }, [selectedDocId]);
 
   const loadDocuments = async () => {
     try {
-      const res = await api.getDocuments(1, 50);
-      const docs = res.items || [];
+      const res = await api.getDocuments();
+      const rawList = Array.isArray(res) ? res : (res?.items || []);
+      const docs = rawList.filter((d) => d && d.id && d.original_filename);
       setDocuments(docs);
-      if (docs.length > 0 && !selectedDocId) {
-        setSelectedDocId(docs[0].id);
+      if (docs.length > 0) {
+        setSelectedDocId((prev) => (prev && docs.some((d) => d.id === prev) ? prev : docs[0].id));
+      } else {
+        setSelectedDocId('');
       }
     } catch (err) {
       setError('Failed to fetch documents: ' + err.message);
@@ -176,11 +183,15 @@ export function MultimodalLab() {
   const handleExtractTables = async () => {
     if (!selectedDocId) return;
     setTableLoading(true);
+    setHasAttemptedTableExtraction(true);
     try {
-      const res = await api.extractDocumentTables({
+      const payload = {
         document_id: selectedDocId,
-        page_number: selectedPageNum,
-      });
+      };
+      if (tableScope === 'current' && selectedPageNum) {
+        payload.page_number = selectedPageNum;
+      }
+      const res = await api.extractDocumentTables(payload);
       setExtractedTables(res.tables || []);
     } catch (err) {
       setError(err.message);
@@ -293,20 +304,27 @@ export function MultimodalLab() {
         {/* Global Document Selector */}
         <div className="flex items-center gap-2">
           <select
+            id="multimodal-document-select"
             value={selectedDocId}
             onChange={(e) => setSelectedDocId(e.target.value)}
-            className="bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-lg px-3 py-2 focus:ring-2 focus:ring-cyan-500 focus:outline-none"
+            disabled={loading || documents.length === 0}
+            className="bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-lg px-3 py-2 focus:ring-2 focus:ring-cyan-500 focus:outline-none disabled:opacity-50"
           >
-            {documents.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.original_filename} ({d.mime_type.split('/')[1]?.toUpperCase() || 'DOC'})
-              </option>
-            ))}
+            {documents.length === 0 ? (
+              <option value="">No documents available</option>
+            ) : (
+              documents.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.original_filename}
+                </option>
+              ))
+            )}
           </select>
           <button
+            id="multimodal-run-analysis-btn"
             onClick={handleRunAnalysis}
             disabled={loading || !selectedDocId}
-            className="flex items-center gap-1.5 px-3 py-2 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white rounded-lg text-xs font-medium transition shadow-md shadow-cyan-600/20"
+            className="flex items-center gap-1.5 px-3 py-2 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-xs font-medium transition shadow-md shadow-cyan-600/20"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
             {loading ? 'Analyzing...' : 'Run Layout Analysis'}
@@ -386,49 +404,59 @@ export function MultimodalLab() {
               </div>
 
               {/* Rendered Canvas / Mock Frame */}
-              <div className="relative mt-4 bg-slate-950 border border-slate-800/80 rounded-lg overflow-hidden flex items-center justify-center min-h-[500px]">
-                {selectedDocId && (
-                  <img
-                    src={api.getPageImageUrl(selectedDocId, selectedPageNum)}
-                    alt={`Page ${selectedPageNum}`}
-                    className="max-h-[600px] object-contain select-none"
-                    onError={(e) => {
-                      e.target.style.display = 'none';
-                    }}
-                  />
-                )}
-                {/* Bounding box overlays */}
-                {pageElements.map((elem) => {
-                  const b = elem.bounding_box;
-                  const colorMap = {
-                    title: 'border-blue-500 bg-blue-500/10 text-blue-300',
-                    paragraph: 'border-emerald-500 bg-emerald-500/5 text-emerald-300',
-                    table: 'border-amber-500 bg-amber-500/15 text-amber-300',
-                    figure: 'border-purple-500 bg-purple-500/15 text-purple-300',
-                    header: 'border-slate-500 bg-slate-500/10 text-slate-300',
-                    footer: 'border-slate-500 bg-slate-500/10 text-slate-300',
-                  };
-                  const style = colorMap[elem.element_type] || 'border-cyan-500 bg-cyan-500/10';
-
-                  return (
-                    <div
-                      key={elem.id}
-                      style={{
-                        position: 'absolute',
-                        left: `${(b.x0 / (currentPageAsset?.width || 595)) * 100}%`,
-                        top: `${(b.y0 / (currentPageAsset?.height || 842)) * 100}%`,
-                        width: `${(b.width / (currentPageAsset?.width || 595)) * 100}%`,
-                        height: `${(b.height / (currentPageAsset?.height || 842)) * 100}%`,
+              <div className="relative mt-4 bg-slate-950 border border-slate-800/80 rounded-lg overflow-hidden flex items-center justify-center min-h-[500px] p-4">
+                {pages.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-20 text-center px-4">
+                    <Scan className="w-12 h-12 text-slate-600 mb-3 animate-pulse" />
+                    <p className="text-sm font-medium text-slate-300">Document has not been analyzed yet</p>
+                    <p className="text-xs text-slate-500 max-w-sm mt-1">
+                      Click &quot;Run Layout Analysis&quot; above to render page bitmaps, detect bounding boxes, and extract reading order.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="relative inline-block max-w-full">
+                    <img
+                      src={api.getPageImageUrl(selectedDocId, selectedPageNum)}
+                      alt={`Page ${selectedPageNum}`}
+                      className="max-h-[600px] w-auto object-contain select-none block rounded shadow-md"
+                      onError={(e) => {
+                        e.target.style.display = 'none';
                       }}
-                      className={`border rounded border-dashed pointer-events-none transition ${style}`}
-                      title={`${elem.element_type} (Order: #${elem.reading_order})`}
-                    >
-                      <span className="text-[9px] font-mono px-1 bg-slate-900/90 rounded border border-slate-700 absolute -top-2 left-1">
-                        #{elem.reading_order} {elem.element_type}
-                      </span>
-                    </div>
-                  );
-                })}
+                    />
+                    {/* Bounding box overlays */}
+                    {pageElements.map((elem) => {
+                      const b = elem.bounding_box;
+                      const colorMap = {
+                        title: 'border-blue-500 bg-blue-500/10 text-blue-300',
+                        paragraph: 'border-emerald-500 bg-emerald-500/5 text-emerald-300',
+                        table: 'border-amber-500 bg-amber-500/15 text-amber-300',
+                        figure: 'border-purple-500 bg-purple-500/15 text-purple-300',
+                        header: 'border-slate-500 bg-slate-500/10 text-slate-300',
+                        footer: 'border-slate-500 bg-slate-500/10 text-slate-300',
+                      };
+                      const style = colorMap[elem.element_type] || 'border-cyan-500 bg-cyan-500/10';
+
+                      return (
+                        <div
+                          key={elem.id}
+                          style={{
+                            position: 'absolute',
+                            left: `${(b.x0 / (currentPageAsset?.width || 595)) * 100}%`,
+                            top: `${(b.y0 / (currentPageAsset?.height || 842)) * 100}%`,
+                            width: `${(b.width / (currentPageAsset?.width || 595)) * 100}%`,
+                            height: `${(b.height / (currentPageAsset?.height || 842)) * 100}%`,
+                          }}
+                          className={`border rounded border-dashed pointer-events-none transition ${style}`}
+                          title={`${elem.element_type} (Order: #${elem.reading_order})`}
+                        >
+                          <span className="text-[9px] font-mono px-1 bg-slate-900/90 rounded border border-slate-700 absolute -top-2 left-1 whitespace-nowrap">
+                            #{elem.reading_order} {elem.element_type}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -561,46 +589,146 @@ export function MultimodalLab() {
       {/* TAB 3: Table Intelligence */}
       {activeTab === 'tables' && (
         <div className="space-y-6">
-          <div className="p-4 bg-slate-900/80 border border-slate-800 rounded-xl flex items-center justify-between">
+          <div className="p-4 bg-slate-900/80 border border-slate-800 rounded-xl flex flex-wrap items-center justify-between gap-3">
             <div>
               <h3 className="text-sm font-semibold text-slate-200">Structural Table Intelligence</h3>
               <p className="text-xs text-slate-400">
-                Observe how structured table extraction preserves column relationships compared to naive flattened text.
+                Multi-strategy extraction preserves column associations, units, and headers compared to naive text collapse.
               </p>
             </div>
-            <button
-              onClick={handleExtractTables}
-              disabled={tableLoading || !selectedDocId}
-              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-medium transition"
-            >
-              {tableLoading ? 'Extracting...' : 'Extract Tables from Document'}
-            </button>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center bg-slate-950 border border-slate-700/80 rounded-lg p-0.5 text-xs">
+                <button
+                  onClick={() => setTableScope('all')}
+                  className={`px-2.5 py-1 rounded-md transition font-medium ${
+                    tableScope === 'all'
+                      ? 'bg-amber-600/30 text-amber-300 border border-amber-500/40'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  All Pages
+                </button>
+                <button
+                  onClick={() => setTableScope('current')}
+                  className={`px-2.5 py-1 rounded-md transition font-medium ${
+                    tableScope === 'current'
+                      ? 'bg-amber-600/30 text-amber-300 border border-amber-500/40'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  Page {selectedPageNum}
+                </button>
+              </div>
+              <button
+                id="multimodal-extract-tables-btn"
+                onClick={handleExtractTables}
+                disabled={tableLoading || !selectedDocId}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white rounded-lg text-xs font-medium transition shadow-md shadow-amber-600/20"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${tableLoading ? 'animate-spin' : ''}`} />
+                {tableLoading ? 'Extracting...' : 'Extract Tables from Document'}
+              </button>
+            </div>
           </div>
 
           {extractedTables.length === 0 ? (
-            <div className="text-center py-16 bg-slate-900/40 border border-slate-800 rounded-xl text-xs text-slate-500">
-              No tables extracted on this page. Click "Extract Tables from Document" or choose a page with tables.
-            </div>
+            !hasAttemptedTableExtraction ? (
+              <div className="text-center py-16 bg-slate-900/40 border border-slate-800 rounded-xl px-4">
+                <TableIcon className="w-10 h-10 text-slate-600 mx-auto mb-3" />
+                <p className="text-sm font-medium text-slate-300">No tables loaded yet</p>
+                <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
+                  Click &quot;Extract Tables from Document&quot; above to run multi-strategy detection across bordered, rule-divided, and borderless tables.
+                </p>
+              </div>
+            ) : (
+              <div className="bg-slate-900/80 border border-amber-500/30 rounded-xl p-6 space-y-4">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-amber-400 mt-0.5 shrink-0" />
+                  <div>
+                    <h4 className="text-sm font-semibold text-slate-200">
+                      No Tables Detected in {tableScope === 'all' ? 'Document' : `Page ${selectedPageNum}`}
+                    </h4>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      The multi-strategy table extraction pipeline analyzed the specified scope but did not detect any structured tables.
+                    </p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 text-xs">
+                  <div className="bg-slate-950/60 p-3 rounded-lg border border-slate-800">
+                    <span className="font-semibold text-slate-300 block mb-1">Strategy A: Vector Line Grids</span>
+                    <span className="text-slate-500">Checked for fully enclosed bounding cell boxes. (0 bordered tables found)</span>
+                  </div>
+                  <div className="bg-slate-950/60 p-3 rounded-lg border border-slate-800">
+                    <span className="font-semibold text-slate-300 block mb-1">Strategy B: Rule Dividers</span>
+                    <span className="text-slate-500">Checked for clusters of horizontal dividing lines. (0 clusters found)</span>
+                  </div>
+                  <div className="bg-slate-950/60 p-3 rounded-lg border border-slate-800">
+                    <span className="font-semibold text-slate-300 block mb-1">Strategy C: Text Alignment</span>
+                    <span className="text-slate-500">Checked for multi-column whitespace alignments. (0 columns resolved)</span>
+                  </div>
+                </div>
+                <p className="text-xs text-slate-400 italic">
+                  Tip: If this document has tables on other pages, switch the scope to &quot;All Pages&quot; and re-run extraction.
+                </p>
+              </div>
+            )
           ) : (
             <div className="space-y-6">
               {extractedTables.map((t, idx) => (
                 <div key={idx} className="bg-slate-900/90 border border-slate-800 rounded-xl p-5 space-y-4">
                   <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                    <span className="text-xs font-bold text-amber-400 font-mono">
-                      {t.caption} ({t.num_rows} rows × {t.num_cols} cols)
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-amber-400 font-mono">
+                        {t.caption}
+                      </span>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                        {t.num_rows} rows × {t.num_cols} cols
+                      </span>
+                    </div>
                     <span className="text-[11px] text-slate-500 font-mono">
-                      Page #{t.page_number}
+                      Page #{t.page_number} • ID: {t.table_id}
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Interactive Structured HTML Grid */}
+                  <div>
+                    <span className="text-xs font-semibold text-slate-200 block mb-2 flex items-center gap-1.5">
+                      <TableIcon className="w-3.5 h-3.5 text-amber-400" />
+                      Structured Interactive Grid
+                    </span>
+                    <div className="overflow-x-auto border border-slate-800 rounded-lg bg-slate-950/80 shadow-inner max-h-96">
+                      <table className="w-full text-left text-xs text-slate-300">
+                        <thead className="bg-slate-900/90 text-amber-300 uppercase text-[10px] font-semibold tracking-wider sticky top-0 border-b border-slate-700">
+                          <tr>
+                            {t.headers?.map((h, hIdx) => (
+                              <th key={hIdx} className="px-3 py-2.5 whitespace-nowrap border-r border-slate-800/80 last:border-r-0">
+                                {h}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
+                          {t.rows?.map((row, rIdx) => (
+                            <tr key={rIdx} className={rIdx % 2 === 0 ? 'bg-slate-900/40 hover:bg-slate-800/50' : 'bg-slate-950/40 hover:bg-slate-800/50'}>
+                              {row.map((cell, cIdx) => (
+                                <td key={cIdx} className="px-3 py-2 whitespace-nowrap border-r border-slate-800/50 last:border-r-0 text-slate-300">
+                                  {cell || <span className="text-slate-600">—</span>}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-2">
                     {/* Structured Markdown Render */}
                     <div>
                       <span className="text-xs font-semibold text-slate-300 block mb-2">
                         1. Structured Table Representation (Markdown)
                       </span>
-                      <pre className="text-xs font-mono bg-slate-950 p-3 rounded-lg border border-slate-800 text-amber-200 whitespace-pre-wrap">
+                      <pre className="text-xs font-mono bg-slate-950 p-3 rounded-lg border border-slate-800 text-amber-200 whitespace-pre-wrap max-h-64 overflow-y-auto">
                         {t.markdown_table}
                       </pre>
                     </div>
@@ -610,7 +738,7 @@ export function MultimodalLab() {
                       <span className="text-xs font-semibold text-rose-300 block mb-2">
                         2. Naive Flattened Text (Destroys Column Associations)
                       </span>
-                      <pre className="text-xs font-mono bg-slate-950 p-3 rounded-lg border border-slate-800 text-rose-200/80 whitespace-pre-wrap">
+                      <pre className="text-xs font-mono bg-slate-950 p-3 rounded-lg border border-slate-800 text-rose-200/80 whitespace-pre-wrap max-h-64 overflow-y-auto">
                         {t.raw_flattened_text}
                       </pre>
                     </div>

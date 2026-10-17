@@ -21,6 +21,7 @@ from app.rag.multimodal.schemas import (
     MultimodalBenchmarkReport,
 )
 from app.rag.multimodal.service import MultimodalService
+from app.rag.multimodal.generation.vision_provider import VisionProviderError
 from app.rag.multimodal.embeddings.multimodal_registry import MultimodalModelRegistry
 
 router = APIRouter()
@@ -168,6 +169,8 @@ def search_multimodal_endpoint(
         query=req.query,
         strategy=req.strategy,
         document_id=req.document_id,
+        page_number=req.page_number,
+        element_ids=req.element_ids,
         top_k=req.top_k,
         ocr_weight=req.ocr_weight,
         visual_weight=req.visual_weight,
@@ -188,6 +191,12 @@ def query_vision_endpoint(
             element_ids=req.element_ids,
             provider=req.provider,
         )
+    except VisionProviderError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

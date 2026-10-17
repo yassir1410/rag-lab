@@ -14,6 +14,7 @@ class PageLevelRetriever:
         db: Session,
         query: str,
         document_id: Optional[uuid.UUID] = None,
+        page_number: Optional[int] = None,
         top_k: int = 5,
     ) -> List[Dict[str, Any]]:
         terms = [t.lower().strip() for t in query.split() if len(t.strip()) > 2]
@@ -23,6 +24,8 @@ class PageLevelRetriever:
         stmt = select(DocumentPageAsset)
         if document_id:
             stmt = stmt.where(DocumentPageAsset.document_id == document_id)
+        if page_number:
+            stmt = stmt.where(DocumentPageAsset.page_number == page_number)
 
         pages = db.scalars(stmt).all()
         scored_pages = []
@@ -33,6 +36,8 @@ class PageLevelRetriever:
             text_lower = combined_text.lower()
             matches = sum(1 for t in terms if t in text_lower)
             score = round(min(1.0, 0.3 + (0.7 * matches / max(1, len(terms)))), 3) if matches > 0 else 0.2
+
+            asset_url = f"/api/v1/multimodal/documents/{p.document_id}/pages/{p.page_number}/image"
 
             scored_pages.append({
                 "id": str(p.id),
@@ -47,7 +52,8 @@ class PageLevelRetriever:
                     "is_scanned": p.is_scanned,
                     "native_char_count": p.native_text_char_count,
                 },
-                "image_path": p.image_path,
+                "image_path": asset_url,
+                "_local_image_path": p.image_path,
                 "bounding_box": None,
                 "citation_tag": f"[PAGE_{p.page_number}]",
                 "strategy": "page_level",

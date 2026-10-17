@@ -1,5 +1,5 @@
 import uuid
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 from pydantic import BaseModel, Field
 
 
@@ -119,6 +119,8 @@ class MultimodalSearchRequest(BaseModel):
         "hybrid",
         description="ocr_text, image_to_image, text_to_image, page_level, hybrid",
     )
+    page_number: Optional[int] = None
+    element_ids: Optional[List[uuid.UUID]] = None
     top_k: int = Field(5, ge=1, le=20)
     ocr_weight: float = Field(0.5, ge=0.0, le=1.0)
     visual_weight: float = Field(0.5, ge=0.0, le=1.0)
@@ -158,7 +160,7 @@ class VisionQARequest(BaseModel):
 class VisionQAResponse(BaseModel):
     question: str
     answer: str
-    citations: List[Dict[str, Any]]
+    citations: List[Union[str, Dict[str, Any]]]
     evidence_items: List[Dict[str, Any]]
     model_used: str
     is_vision_enabled: bool

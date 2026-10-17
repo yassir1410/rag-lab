@@ -3,6 +3,9 @@ from typing import List, Dict, Any
 import pymupdf
 
 
+from app.rag.multimodal.ingestion.table_extractor import TableExtractor
+
+
 class DocumentLayoutAnalyzer:
     """Analyzes document page geometry to classify structural elements and reconstruct natural reading order."""
 
@@ -29,10 +32,12 @@ class DocumentLayoutAnalyzer:
 
         # Find tables first to prevent table text from being split into isolated paragraphs
         table_bboxes = []
+        extracted_tables = []
         try:
-            tabs = page.find_tables()
-            for t in tabs:
-                tx0, ty0, tx1, ty1 = t.bbox
+            extracted_tables = TableExtractor.extract_tables_from_page(page, page_number)
+            for t in extracted_tables:
+                b = t.get("bounding_box", {})
+                tx0, ty0, tx1, ty1 = b.get("x0", 0), b.get("y0", 0), b.get("x1", 0), b.get("y1", 0)
                 table_bboxes.append((tx0, ty0, tx1, ty1))
         except Exception:
             pass
@@ -90,24 +95,13 @@ class DocumentLayoutAnalyzer:
 
         # 2. Add table elements
         try:
-            tabs = page.find_tables()
-            for t_idx, t in enumerate(tabs):
-                tx0, ty0, tx1, ty1 = t.bbox
-                extracted_data = t.extract()
-                headers = [str(c or "").strip() for c in (extracted_data[0] if extracted_data else [])]
-                rows = [
-                    [str(c or "").strip() for c in r]
-                    for r in (extracted_data[1:] if len(extracted_data) > 1 else [])
-                ]
-                
-                # Format markdown table
-                md_lines = []
-                if headers:
-                    md_lines.append("| " + " | ".join(headers) + " |")
-                    md_lines.append("| " + " | ".join(["---"] * len(headers)) + " |")
-                for row in rows:
-                    md_lines.append("| " + " | ".join(row) + " |")
-                md_table = "\n".join(md_lines)
+            for t_idx, t in enumerate(extracted_tables):
+                b = t.get("bounding_box", {})
+                tx0 = b.get("x0", 0.0)
+                ty0 = b.get("y0", 0.0)
+                tx1 = b.get("x1", 0.0)
+                ty1 = b.get("y1", 0.0)
+                md_table = t.get("markdown_table", "")
 
                 t_bbox = {
                     "x0": round(tx0 * scale_x, 1),
@@ -123,14 +117,16 @@ class DocumentLayoutAnalyzer:
                     "element_type": "table",
                     "content_text": md_table,
                     "bounding_box": t_bbox,
-                    "confidence": 0.92,
+                    "confidence": 0.95,
                     "structured_data": {
-                        "table_id": f"tbl_{page_number}_{t_idx + 1}",
-                        "num_rows": len(rows),
-                        "num_cols": len(headers),
-                        "headers": headers,
-                        "rows": rows,
+                        "table_id": t.get("table_id", f"tbl_{page_number}_{t_idx + 1}"),
+                        "caption": t.get("caption", f"Table {t_idx + 1} (Page {page_number})"),
+                        "num_rows": t.get("num_rows", 0),
+                        "num_cols": t.get("num_cols", 0),
+                        "headers": t.get("headers", []),
+                        "rows": t.get("rows", []),
                         "markdown": md_table,
+                        "raw_flattened_text": t.get("raw_flattened_text", ""),
                     },
                     "_geom": (tx0, ty0, tx1, ty1),
                 })

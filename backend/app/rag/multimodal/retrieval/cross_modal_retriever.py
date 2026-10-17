@@ -3,7 +3,7 @@ import numpy as np
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import select
-from app.models.multimodal import MultimodalEmbedding, DocumentElement, DocumentPageAsset
+from app.models.multimodal import MultimodalEmbedding
 from app.rag.multimodal.embeddings.image_embedding_provider import MultimodalEmbeddingProvider
 
 
@@ -18,6 +18,8 @@ class CrossModalRetriever:
         db: Session,
         query: str,
         document_id: Optional[uuid.UUID] = None,
+        page_number: Optional[int] = None,
+        element_ids: Optional[List[uuid.UUID]] = None,
         top_k: int = 5,
     ) -> List[Dict[str, Any]]:
         query_vec = np.array(self.provider.encode_text(query), dtype=np.float32)
@@ -27,6 +29,8 @@ class CrossModalRetriever:
         )
         if document_id:
             stmt = stmt.where(MultimodalEmbedding.document_id == document_id)
+        if element_ids:
+            stmt = stmt.where(MultimodalEmbedding.element_id.in_(element_ids))
 
         embeddings_records = db.scalars(stmt).all()
         scored = []
@@ -34,15 +38,22 @@ class CrossModalRetriever:
         for record in embeddings_records:
             if record.vector is None:
                 continue
-            rec_vec = np.array(record.vector, dtype=np.float32)
-            # Cosine similarity (since vectors are L2-normalized)
-            sim = float(np.dot(query_vec, rec_vec))
 
             elem = record.element
             page_asset = record.page_asset
             page_num = elem.page_number if elem else (page_asset.page_number if page_asset else 1)
+
+            # Apply page_number filter if specified
+            if page_number is not None and page_num != page_number:
+                continue
+
+            rec_vec = np.array(record.vector, dtype=np.float32)
+            # Cosine similarity (since vectors are L2-normalized)
+            sim = float(np.dot(query_vec, rec_vec))
+
             elem_type = elem.element_type if elem else "figure"
-            img_path = (elem.asset_path if elem else None) or (page_asset.image_path if page_asset else None)
+            local_img_path = (elem.asset_path if elem else None) or (page_asset.image_path if page_asset else None)
+            public_image_url = f"/api/v1/multimodal/documents/{record.document_id}/pages/{page_num}/image"
 
             scored.append({
                 "id": str(record.id),
@@ -52,7 +63,8 @@ class CrossModalRetriever:
                 "score": round(max(0.0, min(1.0, (sim + 1.0) / 2.0)), 4),
                 "content_text": (elem.content_text if elem else "") or f"Visual element on page {page_num}",
                 "structured_data": elem.structured_data if elem else {},
-                "image_path": img_path,
+                "image_path": public_image_url,
+                "_local_image_path": local_img_path,
                 "bounding_box": elem.bounding_box if elem else None,
                 "citation_tag": f"[IMG_P{page_num}]",
                 "strategy": "text_to_image",

@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: Optional[str] = None
     OPENAI_API_BASE: str = "https://api.openai.com/v1"
     GEMINI_API_KEY: Optional[str] = None
+    GEMINI_MODEL: str = "gemini-3.8-flash"
+
 
     # API
     API_V1_STR: str = "/api/v1"
