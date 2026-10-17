@@ -149,11 +149,40 @@ This roadmap outlines the complete, pedagogical progression of the **RAG Enginee
   - 15-scenario synthetic multimodal evaluation benchmark suite with 100% pass rate.
   - Comprehensive French tutorial, experiment report, and validation report (`docs/tutorials/12-multimodal-rag.md`, `docs/experiments/12-multimodal-experiments.md`, `docs/experiments/12-validation-report.md`).
 
-### Phase 13: Production Hardening & Observability
+### Phase 12.5: Unified RAG & Intelligent Retrieval Routing
+- **Status:** Completed
+- **Milestones:**
+  - Non-destructive orchestration connecting all prior retrieval engines (`text_dense`, `text_hybrid`, `multimodal_table`, `multimodal_visual`, `graph`, `agentic`) without rebuilding or altering existing labs.
+  - Live index capability auditing via `DocumentCapabilityService` preventing cross-document contamination when filtering by specific documents.
+  - `IntelligentQueryRouter` featuring `auto`, `manual`, and `comparative` modes with linguistic intent detection (`tabular`, `visual`, `relational`, `agentic`, `text`).
+  - Score normalization and rank-based Reciprocal Rank Fusion (RRF, $k=60$) blending heterogeneous scores into a unified evidence candidate list.
+  - Source-aware context builder with stable `[S1]`, `[S2]` citation tokens and strict citation verification against grounded evidence items.
+  - Multimodal vision dispatch connecting to `GeminiVisionProvider` (`gemini-3.8-flash`) transmitting real Base64 image payloads when visual assets are present.
+  - Upgraded React Unified RAG Chat studio featuring live document capability chips, router decision trail card, modality-specific cards (Markdown tables, image thumbnails, graph triples), and interactive clickable citation badges.
+  - 15-scenario synthetic evaluation benchmark with 100% pass rate.
+  - Comprehensive French tutorial, evaluation report, and validation report (`docs/tutorials/12-5-unified-rag.md`, `docs/experiments/12-5-unified-rag-evaluation.md`, `docs/experiments/12-5-validation-report.md`).
+
+### Phase 13: RAG Evaluation, Observability & Quality Engineering
+- **Status:** Completed
+- **Milestones:**
+  - Extended evaluation schema & Alembic migration `0012_evaluation_observability`: `evaluation_traces` table and enrichment of datasets, questions, runs, and item results.
+  - Granular multi-stage tracing (`EvaluationTracer`, `TraceStage`) across `routing`, `retrieval`, `reranking`, `context_assembly`, `generation`, and `postprocessing` with automatic redaction of API keys (`x-goog-api-key`, Bearer) and image base64 payloads (`[REDACTED_BASE64_IMAGE]`).
+  - Pure deterministic generation accuracy suite: `exact_match`, `token_f1`, `normalized_answer_match` (handling bilingual French/English contractions and punctuation), and `numerical_correctness` with relative tolerance and unit validation.
+  - Routing quality metrics: `route_accuracy`, `multi_route_precision_recall`, unnecessary vision detection, unnecessary agentic overhead detection, missing index detection, and document isolation audit.
+  - Retrieval metrics extension: $F_1@k$ harmonic mean integration alongside Precision@k, Recall@k, HitRate, MRR, and nDCG.
+  - Transparent cost accounting (Version 2026-Q4 pricing) tracking provider-reported tokens vs. estimated tokens with unknown model safeguards.
+  - Extended `EvaluationRunner` orchestrating `run_type="unified"` runs with background execution, progress tracking (`progress_current`, `progress_total`), and safe cancellation.
+  - Benchmark ground truth dataset: 24 multi-modal scenarios (BM-01 to BM-24) seeded in database (`d4de5bc1-fffc-43dc-8992-1636733c2b91`).
+  - Multi-format data export: JSON, CSV for run results, and JSONL for dataset distributions.
+  - Upgraded React Evaluation Studio with Routing Quality tab, Traces & Latency Waterfall inspector, and live progress indicators.
+  - 186/186 automated tests passing in backend test suite; 0 errors in React Vite production build.
+  - Comprehensive French tutorial, experiment report, and validation report (`docs/tutorials/13-rag-evaluation-observability.md`, `docs/experiments/13-evaluation-benchmark.md`, `docs/experiments/13-validation-report.md`).
+
+### Phase 14: Production Hardening & Advanced Security
 - **Status:** Planned
 - **Milestones:**
   - Semantic caching (Redis / pgvector) to reduce duplicate LLM generation costs.
   - Distributed rate limiting and concurrent request throttling.
-  - OpenTelemetry distributed tracing and production observability.
-  - Adversarial prompt injection defense and safety auditing.
+  - OpenTelemetry distributed tracing and production APM exporters.
+  - Adversarial prompt injection defense, jailbreak detection, and security guardrails.
 

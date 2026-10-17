@@ -402,6 +402,99 @@ class ApiClient {
   }
 
   // ==========================================
+  // Phase 12.5 Unified RAG & Intelligent Routing API
+  // ==========================================
+
+  async getUnifiedRoutes() {
+    return this._request('/api/v1/unified-rag/routes');
+  }
+
+  async getUnifiedCapabilities(documentId = null) {
+    const url = documentId
+      ? `/api/v1/unified-rag/capabilities?document_id=${documentId}`
+      : '/api/v1/unified-rag/capabilities';
+    return this._request(url);
+  }
+
+  async queryUnifiedRAG(payload) {
+    return this._request('/api/v1/unified-rag/query', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async queryUnifiedRAGStream(payload, onEvent, onError) {
+    const url = `${API_BASE_URL}/api/v1/unified-rag/query/stream`;
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `HTTP ${response.status}: Failed to stream Unified RAG query`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let buffer = '';
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop();
+
+        for (const block of lines) {
+          if (!block.trim()) continue;
+          let eventType = 'message';
+          let eventData = null;
+
+          const blockLines = block.split('\n');
+          for (const line of blockLines) {
+            if (line.startsWith('event: ')) {
+              eventType = line.slice(7).trim();
+            } else if (line.startsWith('data: ')) {
+              try {
+                eventData = JSON.parse(line.slice(6));
+              } catch {
+                eventData = line.slice(6);
+              }
+            }
+          }
+
+          if (eventData !== null) {
+            onEvent(eventType, eventData);
+          }
+        }
+      }
+    } catch (err) {
+      if (onError) onError(err);
+      else throw err;
+    }
+  }
+
+  async compareUnifiedRoutes(question, documentId = null) {
+    let url = `/api/v1/unified-rag/compare?question=${encodeURIComponent(question)}`;
+    if (documentId) {
+      url += `&document_id=${documentId}`;
+    }
+    return this._request(url, {
+      method: 'POST',
+    });
+  }
+
+  async getUnifiedTrace(traceId) {
+    return this._request(`/api/v1/unified-rag/traces/${traceId}`);
+  }
+
+  // ==========================================
   // Phase 07 Evaluation & Benchmarking API
   // ==========================================
 
@@ -484,12 +577,28 @@ class ApiClient {
     });
   }
 
-  async exportEvaluationDataset(datasetId) {
-    return this._request(`/api/v1/evaluation/datasets/${datasetId}/export`);
+  async exportEvaluationDataset(datasetId, format = 'json') {
+    return this._request(`/api/v1/evaluation/datasets/${datasetId}/export?format=${format}`);
   }
 
-  async createEvaluationRun(data) {
-    return this._request('/api/v1/evaluation/runs', {
+  async getEvaluationRunProgress(runId) {
+    return this._request(`/api/v1/evaluation/runs/${runId}/progress`);
+  }
+
+  async getEvaluationRunTraces(runId) {
+    return this._request(`/api/v1/evaluation/runs/${runId}/traces`);
+  }
+
+  async getEvaluationTrace(traceId) {
+    return this._request(`/api/v1/evaluation/traces/${traceId}`);
+  }
+
+  async exportEvaluationRun(runId, format = 'json') {
+    return this._request(`/api/v1/evaluation/runs/${runId}/export?format=${format}`);
+  }
+
+  async createEvaluationRun(data, runAsync = false) {
+    return this._request(`/api/v1/evaluation/runs?run_async=${runAsync}`, {
       method: 'POST',
       body: JSON.stringify(data),
     });

@@ -18,6 +18,7 @@ from app.models.evaluation import (
     EvaluationQuestion,
     EvaluationRun,
     EvaluationItemResult,
+    EvaluationTrace,
 )
 from app.evaluation.runner import evaluation_runner, _calculate_percentile
 from app.evaluation.retrieval.metrics import precision_at_k, recall_at_k
@@ -63,31 +64,47 @@ class DatasetResponse(BaseModel):
 class QuestionCreateRequest(BaseModel):
     question: str = Field(..., min_length=3)
     reference_answer: str = Field(..., min_length=1)
+    acceptable_answers: List[str] = Field(default_factory=list)
     relevant_document_ids: List[uuid.UUID] = Field(default_factory=list)
     relevant_chunk_ids: List[uuid.UUID] = Field(default_factory=list)
     expected_evidence: Optional[str] = None
+    expected_routes: List[str] = Field(default_factory=list)
+    expected_citations: List[str] = Field(default_factory=list)
+    modality: str = Field(default="text", description="text, table, visual, graph, agentic, mixed")
     category: str = Field(
         default="factual",
         description="Category: factual, multi_chunk, multi_document, paraphrasing, ambiguous, unanswerable, conflicting, prompt_injection",
     )
     difficulty: str = Field(default="medium", description="easy, medium, hard")
+    tags: List[str] = Field(default_factory=list)
+    label_source: str = Field(default="human", description="human, synthetic, unverified")
     is_answerable: bool = True
     is_reviewed: bool = False
     reviewer_notes: Optional[str] = None
+    numerical_answer: Optional[Dict[str, Any]] = None
+    document_scope: List[str] = Field(default_factory=list)
     metadata_json: Dict[str, Any] = Field(default_factory=dict)
 
 
 class QuestionUpdateRequest(BaseModel):
     question: Optional[str] = None
     reference_answer: Optional[str] = None
+    acceptable_answers: Optional[List[str]] = None
     relevant_document_ids: Optional[List[uuid.UUID]] = None
     relevant_chunk_ids: Optional[List[uuid.UUID]] = None
     expected_evidence: Optional[str] = None
+    expected_routes: Optional[List[str]] = None
+    expected_citations: Optional[List[str]] = None
+    modality: Optional[str] = None
     category: Optional[str] = None
     difficulty: Optional[str] = None
+    tags: Optional[List[str]] = None
+    label_source: Optional[str] = None
     is_answerable: Optional[bool] = None
     is_reviewed: Optional[bool] = None
     reviewer_notes: Optional[str] = None
+    numerical_answer: Optional[Dict[str, Any]] = None
+    document_scope: Optional[List[str]] = None
     metadata_json: Optional[Dict[str, Any]] = None
 
 
@@ -108,6 +125,7 @@ class QuestionResponse(BaseModel):
     dataset_id: uuid.UUID
     question: str
     reference_answer: str
+    acceptable_answers: List[str] = Field(default_factory=list)
     relevant_document_ids: List[uuid.UUID]
     relevant_chunk_ids: List[uuid.UUID]
     relevance_labels: Dict[str, int] = Field(default_factory=dict)
@@ -115,11 +133,18 @@ class QuestionResponse(BaseModel):
     revision: int = 1
     key_evidence_spans: List[str] = Field(default_factory=list)
     expected_evidence: Optional[str]
+    expected_routes: List[str] = Field(default_factory=list)
+    expected_citations: List[str] = Field(default_factory=list)
+    modality: str = "text"
     category: str
     difficulty: str
+    tags: List[str] = Field(default_factory=list)
+    label_source: str = "human"
     is_answerable: bool
     is_reviewed: bool
     reviewer_notes: Optional[str]
+    numerical_answer: Optional[Dict[str, Any]] = None
+    document_scope: List[str] = Field(default_factory=list)
     metadata_json: Dict[str, Any]
     created_at: str
 
@@ -127,7 +152,7 @@ class QuestionResponse(BaseModel):
 class EvaluationRunCreateRequest(BaseModel):
     dataset_id: uuid.UUID
     name: str = Field(..., min_length=1, max_length=150)
-    run_type: str = Field(default="end_to_end", description="retrieval_only, generation_only, end_to_end")
+    run_type: str = Field(default="end_to_end", description="retrieval_only, generation_only, end_to_end, unified")
     retrieval_strategy: str = Field(
         default="dense_only",
         description="Retrieval strategy: 'dense_only', 'lexical_only', 'hybrid_linear', 'hybrid_rrf', 'dense_rerank', 'hybrid_rrf_rerank', 'multi_query_hybrid_rerank', 'adaptive_context'",
@@ -145,6 +170,8 @@ class EvaluationRunCreateRequest(BaseModel):
     probes: Optional[int] = Field(default=1, ge=1, le=100)
     llm_provider: str = Field(default="mock", description="mock, gemini, openai, ollama")
     llm_model: Optional[str] = None
+    routing_mode: str = Field(default="auto", description="auto, manual, comparative")
+    manual_routes: Optional[List[str]] = None
     prompt_template: str = Field(default="grounded")
     temperature: float = Field(default=0.0, ge=0.0, le=2.0)
     max_context_tokens: int = Field(default=2000, ge=100, le=32000)
@@ -166,6 +193,10 @@ class EvaluationRunResponse(BaseModel):
     latency_summary: Dict[str, Any]
     token_summary: Dict[str, Any]
     cost_summary: Dict[str, Any]
+    routing_summary: Dict[str, Any] = Field(default_factory=dict)
+    experiment_snapshot: Dict[str, Any] = Field(default_factory=dict)
+    progress_current: int = 0
+    progress_total: int = 0
     error_message: Optional[str]
     created_at: str
     completed_at: Optional[str]
@@ -185,11 +216,32 @@ class EvaluationItemResultResponse(BaseModel):
     answer_relevance_score: Optional[float]
     citation_metrics: Dict[str, Any]
     claim_judgments: List[Dict[str, Any]]
+    routing_metrics: Dict[str, Any] = Field(default_factory=dict)
+    accuracy_metrics: Dict[str, Any] = Field(default_factory=dict)
     latency_breakdown: Dict[str, Any]
     token_breakdown: Dict[str, Any]
+    provider_reported_tokens: Dict[str, Any] = Field(default_factory=dict)
+    measurement_source: str = "measured"
     estimated_cost_usd: float
+    trace_id: Optional[str] = None
     status: str
     error_message: Optional[str]
+    created_at: str
+
+
+class TraceResponse(BaseModel):
+    id: uuid.UUID
+    trace_id: str
+    run_id: Optional[uuid.UUID]
+    item_result_id: Optional[uuid.UUID]
+    request_id: Optional[str]
+    document_ids: List[str]
+    selected_routes: List[str]
+    provider: str
+    model: str
+    stages: List[Dict[str, Any]]
+    total_latency_ms: float
+    error_info: Optional[str]
     created_at: str
 
 
@@ -317,6 +369,7 @@ def _format_question_response(item: EvaluationQuestion) -> QuestionResponse:
         dataset_id=item.dataset_id,
         question=item.question,
         reference_answer=item.reference_answer,
+        acceptable_answers=getattr(item, "acceptable_answers", []) or [],
         relevant_document_ids=[uuid.UUID(str(x)) for x in (item.relevant_document_ids or [])],
         relevant_chunk_ids=[uuid.UUID(str(x)) for x in (item.relevant_chunk_ids or [])],
         relevance_labels=item.relevance_labels or {},
@@ -324,11 +377,18 @@ def _format_question_response(item: EvaluationQuestion) -> QuestionResponse:
         revision=item.revision or 1,
         key_evidence_spans=item.key_evidence_spans or [],
         expected_evidence=item.expected_evidence,
+        expected_routes=getattr(item, "expected_routes", []) or [],
+        expected_citations=getattr(item, "expected_citations", []) or [],
+        modality=getattr(item, "modality", "text") or "text",
         category=item.category,
         difficulty=item.difficulty,
+        tags=getattr(item, "tags", []) or [],
+        label_source=getattr(item, "label_source", "human") or "human",
         is_answerable=item.is_answerable,
         is_reviewed=item.is_reviewed,
         reviewer_notes=item.reviewer_notes,
+        numerical_answer=getattr(item, "numerical_answer", None),
+        document_scope=getattr(item, "document_scope", []) or [],
         metadata_json=item.metadata_json or {},
         created_at=item.created_at.isoformat(),
     )
@@ -391,6 +451,7 @@ def add_question(
         dataset_id=dataset_id,
         question=req.question.strip(),
         reference_answer=req.reference_answer.strip(),
+        acceptable_answers=req.acceptable_answers or [],
         relevant_document_ids=[str(d) for d in req.relevant_document_ids],
         relevant_chunk_ids=[str(c) for c in req.relevant_chunk_ids],
         relevance_labels=initial_labels,
@@ -398,11 +459,18 @@ def add_question(
         revision=1,
         key_evidence_spans=[],
         expected_evidence=req.expected_evidence,
+        expected_routes=req.expected_routes or [],
+        expected_citations=req.expected_citations or [],
+        modality=req.modality or "text",
         category=req.category,
         difficulty=req.difficulty,
+        tags=req.tags or [],
+        label_source=req.label_source or "human",
         is_answerable=req.is_answerable,
         is_reviewed=req.is_reviewed,
         reviewer_notes=req.reviewer_notes,
+        numerical_answer=req.numerical_answer,
+        document_scope=req.document_scope or [],
         metadata_json=req.metadata_json or {},
     )
     db.add(q)
@@ -422,22 +490,38 @@ def update_question(
         q.question = req.question.strip()
     if req.reference_answer is not None:
         q.reference_answer = req.reference_answer.strip()
+    if req.acceptable_answers is not None:
+        q.acceptable_answers = req.acceptable_answers
     if req.relevant_document_ids is not None:
         q.relevant_document_ids = [str(d) for d in req.relevant_document_ids]
     if req.relevant_chunk_ids is not None:
         q.relevant_chunk_ids = [str(c) for c in req.relevant_chunk_ids]
     if req.expected_evidence is not None:
         q.expected_evidence = req.expected_evidence
+    if req.expected_routes is not None:
+        q.expected_routes = req.expected_routes
+    if req.expected_citations is not None:
+        q.expected_citations = req.expected_citations
+    if req.modality is not None:
+        q.modality = req.modality
     if req.category is not None:
         q.category = req.category
     if req.difficulty is not None:
         q.difficulty = req.difficulty
+    if req.tags is not None:
+        q.tags = req.tags
+    if req.label_source is not None:
+        q.label_source = req.label_source
     if req.is_answerable is not None:
         q.is_answerable = req.is_answerable
     if req.is_reviewed is not None:
         q.is_reviewed = req.is_reviewed
     if req.reviewer_notes is not None:
         q.reviewer_notes = req.reviewer_notes
+    if req.numerical_answer is not None:
+        q.numerical_answer = req.numerical_answer
+    if req.document_scope is not None:
+        q.document_scope = req.document_scope
     if req.metadata_json is not None:
         q.metadata_json = req.metadata_json
 
@@ -598,7 +682,11 @@ def import_questions(
 
 
 @router.get("/datasets/{dataset_id}/export")
-def export_dataset(dataset_id: uuid.UUID, db: Session = Depends(get_db)):
+def export_dataset(
+    dataset_id: uuid.UUID,
+    format: str = Query("json", pattern="^(json|jsonl)$"),
+    db: Session = Depends(get_db),
+):
     d = db.query(EvaluationDataset).filter(EvaluationDataset.id == dataset_id).first()
     if not d:
         raise HTTPException(status_code=404, detail="Dataset not found")
@@ -610,29 +698,49 @@ def export_dataset(dataset_id: uuid.UUID, db: Session = Depends(get_db)):
         .all()
     )
 
+    formatted_questions = [
+        {
+            "id": str(q.id),
+            "question": q.question,
+            "reference_answer": q.reference_answer,
+            "acceptable_answers": getattr(q, "acceptable_answers", []) or [],
+            "relevant_document_ids": q.relevant_document_ids or [],
+            "relevant_chunk_ids": q.relevant_chunk_ids or [],
+            "expected_evidence": q.expected_evidence,
+            "expected_routes": getattr(q, "expected_routes", []) or [],
+            "expected_citations": getattr(q, "expected_citations", []) or [],
+            "modality": getattr(q, "modality", "text") or "text",
+            "category": q.category,
+            "difficulty": q.difficulty,
+            "tags": getattr(q, "tags", []) or [],
+            "label_source": getattr(q, "label_source", "human") or "human",
+            "is_answerable": q.is_answerable,
+            "is_reviewed": q.is_reviewed,
+            "reviewer_notes": q.reviewer_notes,
+            "numerical_answer": getattr(q, "numerical_answer", None),
+            "document_scope": getattr(q, "document_scope", []) or [],
+            "metadata": q.metadata_json or {},
+        }
+        for q in questions
+    ]
+
+    if format == "jsonl":
+        from fastapi.responses import Response
+        lines = [json.dumps(q_dict, default=str) for q_dict in formatted_questions]
+        return Response(
+            content="\n".join(lines),
+            media_type="application/x-ndjson",
+            headers={"Content-Disposition": f"attachment; filename=dataset_{dataset_id}.jsonl"},
+        )
+
     export_payload = {
         "dataset_id": str(d.id),
         "name": d.name,
         "description": d.description,
+        "version": getattr(d, "version", "1.0"),
         "exported_at": datetime.now(timezone.utc).isoformat(),
         "total_questions": len(questions),
-        "questions": [
-            {
-                "id": str(q.id),
-                "question": q.question,
-                "reference_answer": q.reference_answer,
-                "relevant_document_ids": q.relevant_document_ids or [],
-                "relevant_chunk_ids": q.relevant_chunk_ids or [],
-                "expected_evidence": q.expected_evidence,
-                "category": q.category,
-                "difficulty": q.difficulty,
-                "is_answerable": q.is_answerable,
-                "is_reviewed": q.is_reviewed,
-                "reviewer_notes": q.reviewer_notes,
-                "metadata": q.metadata_json or {},
-            }
-            for q in questions
-        ],
+        "questions": formatted_questions,
     }
     return export_payload
 
@@ -672,8 +780,8 @@ def create_and_execute_run(
     db.refresh(run)
 
     if run_async:
-        # Background task execution
-        background_tasks.add_task(evaluation_runner.run_evaluation, db, run.id)
+        # Background task execution with thread-safe session lifecycle
+        background_tasks.add_task(evaluation_runner.run_evaluation_background, run.id)
     else:
         # Synchronous execution
         run = evaluation_runner.run_evaluation(db, run.id)
@@ -690,6 +798,10 @@ def create_and_execute_run(
         latency_summary=run.latency_summary or {},
         token_summary=run.token_summary or {},
         cost_summary=run.cost_summary or {},
+        routing_summary=run.routing_summary or {},
+        experiment_snapshot=run.experiment_snapshot or {},
+        progress_current=run.progress_current or 0,
+        progress_total=run.progress_total or 0,
         error_message=run.error_message,
         created_at=run.created_at.isoformat(),
         completed_at=run.completed_at.isoformat() if run.completed_at else None,
@@ -725,6 +837,10 @@ def list_runs(
                 latency_summary=r.latency_summary or {},
                 token_summary=r.token_summary or {},
                 cost_summary=r.cost_summary or {},
+                routing_summary=r.routing_summary or {},
+                experiment_snapshot=r.experiment_snapshot or {},
+                progress_current=r.progress_current or 0,
+                progress_total=r.progress_total or 0,
                 error_message=r.error_message,
                 created_at=r.created_at.isoformat(),
                 completed_at=r.completed_at.isoformat() if r.completed_at else None,
@@ -751,6 +867,10 @@ def get_run(run_id: uuid.UUID, db: Session = Depends(get_db)):
         latency_summary=r.latency_summary or {},
         token_summary=r.token_summary or {},
         cost_summary=r.cost_summary or {},
+        routing_summary=r.routing_summary or {},
+        experiment_snapshot=r.experiment_snapshot or {},
+        progress_current=r.progress_current or 0,
+        progress_total=r.progress_total or 0,
         error_message=r.error_message,
         created_at=r.created_at.isoformat(),
         completed_at=r.completed_at.isoformat() if r.completed_at else None,
@@ -780,9 +900,14 @@ def get_run_question_results(run_id: uuid.UUID, db: Session = Depends(get_db)):
             answer_relevance_score=item.answer_relevance_score,
             citation_metrics=item.citation_metrics or {},
             claim_judgments=item.claim_judgments or [],
+            routing_metrics=item.routing_metrics or {},
+            accuracy_metrics=item.accuracy_metrics or {},
             latency_breakdown=item.latency_breakdown or {},
             token_breakdown=item.token_breakdown or {},
+            provider_reported_tokens=item.provider_reported_tokens or {},
+            measurement_source=item.measurement_source or "measured",
             estimated_cost_usd=item.estimated_cost_usd,
+            trace_id=item.trace_id,
             status=item.status,
             error_message=item.error_message,
             created_at=item.created_at.isoformat(),
@@ -825,10 +950,157 @@ def retry_run(run_id: uuid.UUID, db: Session = Depends(get_db)):
         latency_summary=updated_run.latency_summary or {},
         token_summary=updated_run.token_summary or {},
         cost_summary=updated_run.cost_summary or {},
+        routing_summary=updated_run.routing_summary or {},
+        experiment_snapshot=updated_run.experiment_snapshot or {},
+        progress_current=updated_run.progress_current or 0,
+        progress_total=updated_run.progress_total or 0,
         error_message=updated_run.error_message,
         created_at=updated_run.created_at.isoformat(),
         completed_at=updated_run.completed_at.isoformat() if updated_run.completed_at else None,
     )
+@router.get("/runs/{run_id}/progress")
+def get_run_progress(run_id: uuid.UUID, db: Session = Depends(get_db)):
+    r = db.query(EvaluationRun).filter(EvaluationRun.id == run_id).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return {
+        "run_id": str(r.id),
+        "status": r.status,
+        "progress_current": r.progress_current or 0,
+        "progress_total": r.progress_total or 0,
+        "completed_at": r.completed_at.isoformat() if r.completed_at else None,
+        "error_message": r.error_message,
+    }
+
+
+@router.get("/runs/{run_id}/traces", response_model=List[TraceResponse])
+def get_run_traces(run_id: uuid.UUID, db: Session = Depends(get_db)):
+    traces = (
+        db.query(EvaluationTrace)
+        .filter(EvaluationTrace.run_id == run_id)
+        .order_by(EvaluationTrace.created_at)
+        .all()
+    )
+    return [
+        TraceResponse(
+            id=t.id,
+            trace_id=t.trace_id,
+            run_id=t.run_id,
+            item_result_id=t.item_result_id,
+            request_id=t.request_id,
+            document_ids=[str(d) for d in (t.document_ids or [])],
+            selected_routes=t.selected_routes or [],
+            provider=t.provider,
+            model=t.model,
+            stages=t.stages or [],
+            total_latency_ms=t.total_latency_ms,
+            error_info=t.error_info,
+            created_at=t.created_at.isoformat(),
+        )
+        for t in traces
+    ]
+
+
+@router.get("/traces/{trace_id}", response_model=TraceResponse)
+def get_trace_by_id(trace_id: str, db: Session = Depends(get_db)):
+    t = db.query(EvaluationTrace).filter(EvaluationTrace.trace_id == trace_id).first()
+    if not t:
+        raise HTTPException(status_code=404, detail=f"Trace '{trace_id}' not found.")
+    return TraceResponse(
+        id=t.id,
+        trace_id=t.trace_id,
+        run_id=t.run_id,
+        item_result_id=t.item_result_id,
+        request_id=t.request_id,
+        document_ids=[str(d) for d in (t.document_ids or [])],
+        selected_routes=t.selected_routes or [],
+        provider=t.provider,
+        model=t.model,
+        stages=t.stages or [],
+        total_latency_ms=t.total_latency_ms,
+        error_info=t.error_info,
+        created_at=t.created_at.isoformat(),
+    )
+
+
+@router.get("/runs/{run_id}/export")
+def export_run_results(
+    run_id: uuid.UUID,
+    format: str = Query("json", pattern="^(json|csv)$"),
+    db: Session = Depends(get_db),
+):
+    r = db.query(EvaluationRun).filter(EvaluationRun.id == run_id).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="Run not found")
+    items = (
+        db.query(EvaluationItemResult)
+        .filter(EvaluationItemResult.run_id == run_id)
+        .order_by(EvaluationItemResult.created_at)
+        .all()
+    )
+
+    if format == "csv":
+        import csv
+        import io
+        from fastapi.responses import Response
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow([
+            "question_id", "question_text", "status", "reference_answer", "generated_answer",
+            "faithfulness_score", "answer_relevance_score", "estimated_cost_usd", "trace_id"
+        ])
+        for it in items:
+            writer.writerow([
+                str(it.question_id) if it.question_id else "",
+                it.question_text,
+                it.status,
+                it.reference_answer or "",
+                it.generated_answer or "",
+                it.faithfulness_score if it.faithfulness_score is not None else "",
+                it.answer_relevance_score if it.answer_relevance_score is not None else "",
+                it.estimated_cost_usd,
+                it.trace_id or "",
+            ])
+        return Response(
+            content=output.getvalue(),
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename=run_{run_id}.csv"},
+        )
+
+    # JSON export
+    return {
+        "run_id": str(r.id),
+        "name": r.name,
+        "run_type": r.run_type,
+        "status": r.status,
+        "aggregate_metrics": r.aggregate_metrics or {},
+        "latency_summary": r.latency_summary or {},
+        "token_summary": r.token_summary or {},
+        "cost_summary": r.cost_summary or {},
+        "routing_summary": r.routing_summary or {},
+        "experiment_snapshot": r.experiment_snapshot or {},
+        "items": [
+            {
+                "question_id": str(it.question_id) if it.question_id else None,
+                "question_text": it.question_text,
+                "status": it.status,
+                "reference_answer": it.reference_answer,
+                "generated_answer": it.generated_answer,
+                "retrieval_metrics": it.retrieval_metrics or {},
+                "faithfulness_score": it.faithfulness_score,
+                "answer_relevance_score": it.answer_relevance_score,
+                "citation_metrics": it.citation_metrics or {},
+                "routing_metrics": it.routing_metrics or {},
+                "accuracy_metrics": it.accuracy_metrics or {},
+                "latency_breakdown": it.latency_breakdown or {},
+                "token_breakdown": it.token_breakdown or {},
+                "estimated_cost_usd": it.estimated_cost_usd,
+                "trace_id": it.trace_id,
+            }
+            for it in items
+        ],
+    }
 
 
 # ==========================================

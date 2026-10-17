@@ -7,6 +7,7 @@ from app.models.evaluation import (
     EvaluationQuestion,
     EvaluationRun,
     EvaluationItemResult,
+    EvaluationTrace,
 )
 from app.models.conversation import (
     Conversation,
@@ -39,6 +40,7 @@ __all__ = [
     "EvaluationQuestion",
     "EvaluationRun",
     "EvaluationItemResult",
+    "EvaluationTrace",
     "Conversation",
     "ConversationMessage",
     "ConversationSummary",

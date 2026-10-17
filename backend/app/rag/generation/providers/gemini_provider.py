@@ -65,7 +65,11 @@ class GeminiProvider(BaseLLMProvider):
             raise ValueError("Gemini API key is missing. Set GEMINI_API_KEY in your environment.")
 
         target_model = request.metadata.get("model") or "gemini-3.8-flash"
-        url = f"{self._base_url}/models/{target_model}:generateContent?key={self._api_key}"
+        url = f"{self._base_url}/models/{target_model}:generateContent"
+        headers = {
+            "x-goog-api-key": self._api_key,
+            "Content-Type": "application/json",
+        }
 
         contents = []
         if request.system_prompt:
@@ -82,19 +86,22 @@ class GeminiProvider(BaseLLMProvider):
         }
 
         start_time = time.perf_counter()
-        with httpx.Client(timeout=60.0) as client:
-            res = client.post(url, json=payload)
-            if res.status_code != 200:
-                try:
-                    err_json = res.json().get("error", {})
-                    err_msg = err_json.get("message", res.text)
-                    err_status = err_json.get("status") or res.status_code
-                    raise ValueError(f"Gemini API Error ({err_status}): {err_msg}")
-                except (ValueError, Exception) as parse_err:
-                    if isinstance(parse_err, ValueError):
-                        raise
-                    res.raise_for_status()
-            data = res.json()
+        try:
+            with httpx.Client(timeout=45.0) as client:
+                res = client.post(url, headers=headers, json=payload)
+                if res.status_code != 200:
+                    try:
+                        err_json = res.json().get("error", {})
+                        err_msg = err_json.get("message", res.text)
+                        err_status = err_json.get("status") or res.status_code
+                        raise ValueError(f"Gemini API Error ({err_status}): {err_msg}")
+                    except (ValueError, Exception) as parse_err:
+                        if isinstance(parse_err, ValueError):
+                            raise
+                        res.raise_for_status()
+                data = res.json()
+        except httpx.TimeoutException as te:
+            raise ValueError(f"Gemini API request timed out: {te}")
 
         latency_ms = (time.perf_counter() - start_time) * 1000.0
 

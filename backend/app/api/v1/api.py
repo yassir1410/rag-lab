@@ -11,6 +11,7 @@ from app.api.v1.endpoints import (
     agents,
     graph,
     multimodal,
+    unified,
 )
 
 api_router = APIRouter()
@@ -26,5 +27,7 @@ api_router.include_router(conversations.router, prefix="/conversations", tags=["
 api_router.include_router(agents.router, prefix="/agents", tags=["Agentic RAG Lab"])
 api_router.include_router(graph.router, prefix="/graph", tags=["Graph RAG & Knowledge Graph"])
 api_router.include_router(multimodal.router, prefix="/multimodal", tags=["Multimodal RAG & Document Intelligence"])
+api_router.include_router(unified.router, prefix="/unified-rag", tags=["Unified RAG & Intelligent Routing"])
+
 
 

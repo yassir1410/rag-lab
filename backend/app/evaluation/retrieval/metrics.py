@@ -62,6 +62,26 @@ def recall_at_k(
     return float(relevant_retrieved) / float(len(relevant_set))
 
 
+def f1_at_k(
+    retrieved_ids: Sequence[Any],
+    relevant_ids: Union[Set[Any], Sequence[Any]],
+    k: int = 5,
+) -> float:
+    """
+    F1@K = 2 * (Precision@K * Recall@K) / (Precision@K + Recall@K)
+
+    Harmonic mean of Precision@K and Recall@K.
+    Returns 0.0 if Precision@K + Recall@K == 0.0.
+    """
+    if k <= 0:
+        return 0.0
+    p_k = precision_at_k(retrieved_ids, relevant_ids, k=k)
+    r_k = recall_at_k(retrieved_ids, relevant_ids, k=k)
+    if (p_k + r_k) <= 0.0:
+        return 0.0
+    return float(2.0 * p_k * r_k / (p_k + r_k))
+
+
 def hit_rate_at_k(
     retrieved_ids: Sequence[Any],
     relevant_ids: Union[Set[Any], Sequence[Any]],
@@ -217,6 +237,7 @@ def compute_all_retrieval_metrics(
     )
     p_k = precision_at_k(retrieved_ids, relevant_set, k=k)
     r_k = recall_at_k(retrieved_ids, relevant_set, k=k)
+    f1_k = f1_at_k(retrieved_ids, relevant_set, k=k)
     hit_k = hit_rate_at_k(retrieved_ids, relevant_set, k=k)
     rr = reciprocal_rank(retrieved_ids, relevant_set, k=k)
     ap = average_precision(retrieved_ids, relevant_set, k=k)
@@ -225,6 +246,7 @@ def compute_all_retrieval_metrics(
     return {
         f"precision@{k}": round(p_k, 4),
         f"recall@{k}": round(r_k, 4),
+        f"f1@{k}": round(f1_k, 4),
         f"hit_rate@{k}": round(hit_k, 4),
         "reciprocal_rank": round(rr, 4),
         "average_precision": round(ap, 4),

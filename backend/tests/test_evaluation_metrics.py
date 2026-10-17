@@ -2,6 +2,7 @@ import pytest
 from app.evaluation.retrieval.metrics import (
     precision_at_k,
     recall_at_k,
+    f1_at_k,
     hit_rate_at_k,
     reciprocal_rank,
     mean_reciprocal_rank,
@@ -34,6 +35,18 @@ def test_recall_at_k():
     # Empty relevant with custom policy
     assert recall_at_k(retrieved, set(), k=5, no_relevant_policy=1.0) == 1.0
     assert recall_at_k(retrieved, set(), k=5, no_relevant_policy=0.0) == 0.0
+
+
+def test_f1_at_k():
+    retrieved = ["c1", "c2", "c3", "c4", "c5"]
+    relevant = {"c2", "c4"}  # P@5 = 2/5 = 0.4, R@5 = 2/2 = 1.0
+    # F1 = 2 * (0.4 * 1.0) / (0.4 + 1.0) = 0.8 / 1.4 = 4/7 = 0.5714
+    f1 = f1_at_k(retrieved, relevant, k=5)
+    assert round(f1, 4) == round(4.0 / 7.0, 4)
+
+    # Zero precision/recall
+    assert f1_at_k(retrieved, {"c99"}, k=5) == 0.0
+    assert f1_at_k([], relevant, k=5) == 0.0
 
 
 def test_hit_rate_at_k():
